@@ -1,17 +1,20 @@
 import type { ReactNode } from "react"
 import { useLocation } from "@tanstack/react-router"
 import {
+  ArrowRightLeftIcon,
   Building2Icon,
   CalculatorIcon,
   GaugeIcon,
   LogOutIcon,
   NetworkIcon,
+  PaletteIcon,
+  SettingsIcon,
   ShieldCheckIcon,
   SquareTerminalIcon,
   UserCircleIcon,
 } from "lucide-react"
 
-import { ThemeSwitcher } from "#/components/theme-switcher.tsx"
+import { ThemeMenuControl } from "#/components/theme-switcher.tsx"
 import {
   Avatar,
   AvatarFallback,
@@ -252,8 +255,6 @@ export function AppChrome({ children }: { children: ReactNode }) {
             </div>
 
             <div className="ml-auto flex min-w-0 items-center gap-2">
-              <ThemeSwitcher inline />
-
               <DropdownMenu>
                 <DropdownMenuTrigger
                   className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -288,11 +289,46 @@ export function AppChrome({ children }: { children: ReactNode }) {
                       </div>
                     </DropdownMenuLabel>
                   </DropdownMenuGroup>
+
                   <DropdownMenuSeparator />
+
                   <DropdownMenuGroup>
-                    <DropdownMenuItem onClick={() => void authClient.signOut()}>
-                      <LogOutIcon />
-                      Sign out
+                    <DropdownMenuItem
+                      onClick={() =>
+                        window.location.assign(`${consoleBaseURL}/settings/account`)
+                      }
+                    >
+                      <SettingsIcon className="text-muted-foreground" />
+                      Settings
+                    </DropdownMenuItem>
+
+                    <div className="relative">
+                      <PaletteIcon className="pointer-events-none absolute left-2 top-1/2 z-10 size-4 -translate-y-1/2 text-muted-foreground" />
+                      <div className="pl-6">
+                        <ThemeMenuControl />
+                      </div>
+                    </div>
+
+                    <DropdownMenuItem
+                      onClick={() =>
+                        window.location.assign(`${consoleBaseURL}/auth/select-account`)
+                      }
+                    >
+                      <ArrowRightLeftIcon className="text-muted-foreground" />
+                      Switch Account
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
+
+                  <DropdownMenuSeparator />
+
+                  <DropdownMenuGroup>
+                    <DropdownMenuItem
+                      onClick={() =>
+                        window.location.assign(`${consoleBaseURL}/auth/sign-out`)
+                      }
+                    >
+                      <LogOutIcon className="text-muted-foreground" />
+                      Sign Out
                     </DropdownMenuItem>
                   </DropdownMenuGroup>
                 </DropdownMenuContent>
