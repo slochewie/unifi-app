@@ -81,6 +81,13 @@ function numberValue(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : 0
 }
 
+function percentageValue(value: unknown) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null
+
+  const percentage = value <= 1 ? value * 100 : value
+  return Math.min(100, Math.max(0, percentage))
+}
+
 function mapSite(config: SiteConfig, site: UnifiSite | undefined) {
   const counts = site?.statistics?.counts ?? {}
   const internetIssues = site?.statistics?.internetIssues ?? []
@@ -93,6 +100,7 @@ function mapSite(config: SiteConfig, site: UnifiSite | undefined) {
     siteMagic: site ? "Healthy" : "Unavailable",
     internet:
       site && (wanUptime === undefined || wanUptime > 0) ? "Healthy" : "Unavailable",
+    wanUptime: percentageValue(wanUptime),
     lteFailover: config.lteFailover,
     gateway: gatewayShortname
       ? MODEL_NAMES[gatewayShortname] ?? gatewayShortname
