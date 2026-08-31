@@ -1,0 +1,33 @@
+#name: tip-calculator
+
+services:
+
+  unifi-app:
+    image: 'node:26-trixie'
+    working_dir: /app
+    command:
+      - sleep
+      - infinity
+#    command:
+#      - npm
+#      - run
+#      - dev
+#      - --
+#      - --host
+#      - 0.0.0.0
+    stdin_open: true
+    tty: true
+    ports:
+      - "3300:3000"
+    volumes:
+      - './app:/app'
+#    env_file:
+#      - .env
+#      - ./.env-better-auth
+    restart: unless-stopped
+    networks: [niteowl-dev]
+
+networks:
+  niteowl-dev:
+    name: niteowl-dev
+    external: true
