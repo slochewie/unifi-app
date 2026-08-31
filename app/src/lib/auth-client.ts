@@ -1,4 +1,7 @@
-import { organizationClient } from "better-auth/client/plugins"
+import {
+  multiSessionClient,
+  organizationClient,
+} from "better-auth/client/plugins"
 import { createAuthClient } from "better-auth/react"
 
 function getAuthBaseURL() {
@@ -25,6 +28,7 @@ export const authBaseURL = getAuthBaseURL()
 export const authClient = createAuthClient({
   baseURL: authBaseURL,
   plugins: [
+    multiSessionClient(),
     organizationClient({
       teams: {
         enabled: true,
