@@ -1,4 +1,4 @@
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { createFileRoute } from "@tanstack/react-router"
 import {
   ActivityIcon,
@@ -26,27 +26,37 @@ import { authBaseURL, authClient } from "#/lib/auth-client.ts"
 
 export const Route = createFileRoute("/")({ component: NetworkStatusPage })
 
-type SiteConfig = {
+type SiteStatus = {
+  id: string
   name: string
+  siteMagic: string
+  internet: string
   lteFailover: "Ready" | "Unavailable"
+  gateway: string
+  publicIp: string
+  gatewayDevices: number
+  clients: number
+  wifiAps: number
+  switches: number
+  internetIssues: number
+  criticalAlerts: number
+  offlineDevices: number
 }
 
-const sites: SiteConfig[] = [
-  { name: "McCarthy's", lteFailover: "Ready" },
-  { name: "Frog", lteFailover: "Unavailable" },
-  { name: "Bull's", lteFailover: "Ready" },
-  { name: "Library", lteFailover: "Ready" },
-  { name: "Milestone", lteFailover: "Unavailable" },
-]
+type StatusResponse = {
+  updatedAt: string
+  sites: SiteStatus[]
+}
 
 const metrics = [
-  { label: "Gateway Devices", icon: RouterIcon },
-  { label: "Clients", icon: ActivityIcon },
-  { label: "WiFi APs", icon: WifiIcon },
-  { label: "Switches", icon: EthernetPortIcon },
-  { label: "Internet Issues", icon: ShieldAlertIcon },
-  { label: "Offline Devices", icon: CableIcon },
-]
+  { key: "gatewayDevices", label: "Gateway Devices", icon: RouterIcon },
+  { key: "clients", label: "Clients", icon: ActivityIcon },
+  { key: "wifiAps", label: "WiFi APs", icon: WifiIcon },
+  { key: "switches", label: "Switches", icon: EthernetPortIcon },
+  { key: "internetIssues", label: "Internet Issues", icon: ShieldAlertIcon },
+  { key: "criticalAlerts", label: "Critical Alerts", icon: ShieldAlertIcon },
+  { key: "offlineDevices", label: "Offline Devices", icon: CableIcon },
+] as const
 
 function SessionSkeleton() {
   return (
@@ -58,7 +68,7 @@ function SessionSkeleton() {
         </div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 5 }).map((_, index) => (
-            <Skeleton key={index} className="h-80 w-full rounded-xl" />
+            <Skeleton key={index} className="h-96 w-full rounded-xl" />
           ))}
         </div>
       </div>
@@ -84,7 +94,9 @@ function StatusRow({
   )
 }
 
-function SiteCard({ site }: { site: SiteConfig }) {
+function SiteCard({ site }: { site: SiteStatus }) {
+  const healthy = site.internet === "Healthy" && site.offlineDevices === 0
+
   return (
     <Card className="overflow-hidden">
       <CardHeader className="pb-3">
@@ -93,29 +105,31 @@ function SiteCard({ site }: { site: SiteConfig }) {
             <CardTitle className="truncate text-lg">{site.name}</CardTitle>
             <CardDescription>UniFi Network</CardDescription>
           </div>
-          <Badge variant="secondary">Awaiting API</Badge>
+          <Badge variant={healthy ? "secondary" : "destructive"}>
+            {healthy ? "Healthy" : "Attention"}
+          </Badge>
         </div>
       </CardHeader>
 
       <CardContent>
         <div className="space-y-0.5">
-          <StatusRow label="Site Magic" value="—" icon={CloudCogIcon} />
-          <StatusRow label="Internet" value="—" icon={RadioTowerIcon} />
+          <StatusRow label="Site Magic" value={site.siteMagic} icon={CloudCogIcon} />
+          <StatusRow label="Internet" value={site.internet} icon={RadioTowerIcon} />
           <StatusRow label="LTE Failover" value={site.lteFailover} icon={GaugeIcon} />
-          <StatusRow label="Gateway" value="—" icon={RouterIcon} />
-          <StatusRow label="Public IP" value="—" icon={CableIcon} />
+          <StatusRow label="Gateway" value={site.gateway} icon={RouterIcon} />
+          <StatusRow label="Public IP" value={site.publicIp} icon={CableIcon} />
         </div>
 
         <Separator className="my-3" />
 
         <div className="grid grid-cols-2 gap-x-5 gap-y-3">
-          {metrics.map(({ label, icon: Icon }) => (
-            <div key={label} className="min-w-0">
+          {metrics.map(({ key, label, icon: Icon }) => (
+            <div key={key} className="min-w-0">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Icon className="size-3.5 shrink-0" />
                 <span className="truncate">{label}</span>
               </div>
-              <div className="mt-1 text-xl font-semibold tabular-nums">—</div>
+              <div className="mt-1 text-xl font-semibold tabular-nums">{site[key]}</div>
             </div>
           ))}
         </div>
@@ -126,6 +140,9 @@ function SiteCard({ site }: { site: SiteConfig }) {
 
 function NetworkStatusPage() {
   const { data: session, isPending } = authClient.useSession()
+  const [status, setStatus] = useState<StatusResponse | null>(null)
+  const [statusError, setStatusError] = useState<string | null>(null)
+  const [statusPending, setStatusPending] = useState(true)
 
   useEffect(() => {
     if (isPending || session) return
@@ -136,7 +153,48 @@ function NetworkStatusPage() {
     window.location.assign(signInURL.toString())
   }, [isPending, session])
 
-  if (isPending) {
+  useEffect(() => {
+    if (!session) return
+
+    let cancelled = false
+
+    async function loadStatus() {
+      try {
+        const response = await fetch("/api/status", {
+          headers: {
+            Accept: "application/json",
+          },
+        })
+
+        const body = (await response.json()) as StatusResponse | { error?: string }
+
+        if (!response.ok) {
+          throw new Error("error" in body && body.error ? body.error : "Unable to load UniFi status")
+        }
+
+        if (!cancelled) {
+          setStatus(body as StatusResponse)
+          setStatusError(null)
+          setStatusPending(false)
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setStatusError(error instanceof Error ? error.message : "Unable to load UniFi status")
+          setStatusPending(false)
+        }
+      }
+    }
+
+    void loadStatus()
+    const timer = window.setInterval(() => void loadStatus(), 30_000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [session])
+
+  if (isPending || (session && statusPending)) {
     return <SessionSkeleton />
   }
 
@@ -151,20 +209,35 @@ function NetworkStatusPage() {
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Network Status</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              UniFi health and device status for the consoles you are authorized to view.
+              Live UniFi health and device status across NiteOwl-managed venues.
             </p>
           </div>
-          <Badge variant="outline" className="w-fit">
+          <Badge variant={statusError ? "destructive" : "outline"} className="w-fit">
             <CloudCogIcon />
-            UniFi plugin authorization next
+            {statusError
+              ? statusError
+              : status?.updatedAt
+                ? `Updated ${new Date(status.updatedAt).toLocaleTimeString()}`
+                : "Connecting to UniFi"}
           </Badge>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {sites.map((site) => (
-            <SiteCard key={site.name} site={site} />
-          ))}
-        </div>
+        {status?.sites?.length ? (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {status.sites.map((site) => (
+              <SiteCard key={site.id} site={site} />
+            ))}
+          </div>
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle>UniFi status unavailable</CardTitle>
+              <CardDescription>
+                {statusError ?? "The UniFi Site Manager API did not return any configured sites."}
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        )}
       </div>
     </main>
   )
