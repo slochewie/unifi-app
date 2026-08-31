@@ -26,7 +26,7 @@ function applyTheme(theme: Theme) {
   root.style.colorScheme = dark ? "dark" : "light"
 }
 
-export function ThemeSwitcher({ inline = false }: { inline?: boolean }) {
+function useTheme() {
   const [theme, setTheme] = useState<Theme>("system")
 
   useEffect(() => {
@@ -50,14 +50,55 @@ export function ThemeSwitcher({ inline = false }: { inline?: boolean }) {
     return () => media.removeEventListener("change", handleChange)
   }, [theme])
 
-  function changeTheme(value: string) {
-    if (value !== "system" && value !== "light" && value !== "dark") return
-
+  function changeTheme(value: Theme) {
     setTheme(value)
     window.localStorage.setItem(STORAGE_KEY, value)
     applyTheme(value)
   }
 
+  return { theme, changeTheme }
+}
+
+export function ThemeMenuControl() {
+  const { theme, changeTheme } = useTheme()
+
+  const options: Array<{ value: Theme; label: string; icon: typeof MonitorIcon }> = [
+    { value: "system", label: "System", icon: MonitorIcon },
+    { value: "light", label: "Light", icon: SunIcon },
+    { value: "dark", label: "Dark", icon: MoonIcon },
+  ]
+
+  return (
+    <div className="flex items-center justify-between gap-4 px-2 py-1.5 text-sm">
+      <span>Theme</span>
+      <div className="flex items-center rounded-md bg-muted p-0.5">
+        {options.map(({ value, label, icon: Icon }) => (
+          <button
+            key={value}
+            type="button"
+            aria-label={label}
+            title={label}
+            className={`flex size-7 items-center justify-center rounded-sm transition-colors ${
+              theme === value
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              changeTheme(value)
+            }}
+          >
+            <Icon className="size-3.5" />
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+export function ThemeSwitcher({ inline = false }: { inline?: boolean }) {
+  const { theme, changeTheme } = useTheme()
   const Icon =
     theme === "light" ? SunIcon : theme === "dark" ? MoonIcon : MonitorIcon
 
@@ -84,7 +125,14 @@ export function ThemeSwitcher({ inline = false }: { inline?: boolean }) {
         </DropdownMenuTrigger>
 
         <DropdownMenuContent align="end" className="w-36">
-          <DropdownMenuRadioGroup value={theme} onValueChange={changeTheme}>
+          <DropdownMenuRadioGroup
+            value={theme}
+            onValueChange={(value) => {
+              if (value === "system" || value === "light" || value === "dark") {
+                changeTheme(value)
+              }
+            }}
+          >
             <DropdownMenuRadioItem value="system">
               <MonitorIcon />
               System
