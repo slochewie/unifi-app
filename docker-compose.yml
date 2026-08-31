@@ -21,16 +21,10 @@ services:
       - "3300:3000"
     volumes:
       - './app:/app'
-    environment:
-      UNIFI_API_KEY_FILE: /run/secrets/unifi_api_key
-    secrets:
-      - unifi_api_key
+    env_file:
+      - .env
     restart: unless-stopped
     networks: [niteowl-dev]
-
-secrets:
-  unifi_api_key:
-    file: ./secrets/unifi_api_key
 
 networks:
   niteowl-dev:
