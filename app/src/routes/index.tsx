@@ -82,6 +82,29 @@ function SessionSkeleton() {
   )
 }
 
+function StatusLoadingSkeleton() {
+  return (
+    <main className="flex-1 p-4 md:p-6">
+      <div className="w-full space-y-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Network Status</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Live UniFi health and device status across NiteOwl-managed venues.
+            </p>
+          </div>
+          <Skeleton className="h-6 w-36 rounded-full" />
+        </div>
+        <div className={siteGridClassName}>
+          {Array.from({ length: 5 }).map((_, index) => (
+            <Skeleton key={index} className="h-96 w-full rounded-xl" />
+          ))}
+        </div>
+      </div>
+    </main>
+  )
+}
+
 function StatusRow({
   label,
   value,
@@ -192,12 +215,14 @@ function NetworkStatusPage() {
   const [statusPending, setStatusPending] = useState(true)
 
   useEffect(() => {
-    if (isPending || session) return
+    if (isPending || session) {
+      return
+    }
 
-    const redirectTo = window.location.href
-    const signInURL = new URL("/auth/sign-in", authBaseURL)
-    signInURL.searchParams.set("redirectTo", redirectTo)
-    window.location.assign(signInURL.toString())
+    const redirectTo = encodeURIComponent(window.location.href)
+    const signInURL = `${authBaseURL.replace(/\/$/, "")}/auth/sign-in?redirectTo=${redirectTo}`
+
+    window.location.replace(signInURL)
   }, [isPending, session])
 
   useEffect(() => {
@@ -241,12 +266,16 @@ function NetworkStatusPage() {
     }
   }, [session])
 
-  if (isPending || (session && statusPending)) {
+  if (isPending) {
     return <SessionSkeleton />
   }
 
   if (!session) {
     return null
+  }
+
+  if (statusPending) {
+    return <StatusLoadingSkeleton />
   }
 
   return (
