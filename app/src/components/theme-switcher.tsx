@@ -16,6 +16,13 @@ type Theme = "system" | "light" | "dark"
 
 const STORAGE_KEY = "unifi-app-theme"
 
+function getStoredTheme(): Theme {
+  const stored = window.localStorage.getItem(STORAGE_KEY)
+  return stored === "light" || stored === "dark" || stored === "system"
+    ? stored
+    : "system"
+}
+
 function applyTheme(theme: Theme) {
   const root = document.documentElement
   const dark =
@@ -30,12 +37,7 @@ function useTheme() {
   const [theme, setTheme] = useState<Theme>("system")
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(STORAGE_KEY)
-    const initialTheme: Theme =
-      stored === "light" || stored === "dark" || stored === "system"
-        ? stored
-        : "system"
-
+    const initialTheme = getStoredTheme()
     setTheme(initialTheme)
     applyTheme(initialTheme)
   }, [])
@@ -57,6 +59,14 @@ function useTheme() {
   }
 
   return { theme, changeTheme }
+}
+
+export function ThemeInitializer() {
+  useEffect(() => {
+    applyTheme(getStoredTheme())
+  }, [])
+
+  return null
 }
 
 export function ThemeMenuControl() {
