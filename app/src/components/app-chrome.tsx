@@ -1,7 +1,6 @@
 import type { ReactNode } from "react"
 import { useLocation } from "@tanstack/react-router"
 import {
-  ArrowRightLeftIcon,
   Building2Icon,
   CalculatorIcon,
   GaugeIcon,
@@ -14,6 +13,7 @@ import {
   UserCircleIcon,
 } from "lucide-react"
 
+import { AccountSwitcherSubmenu } from "#/components/account-switcher-submenu.tsx"
 import { ThemeMenuControl } from "#/components/theme-switcher.tsx"
 import {
   Avatar,
@@ -309,14 +309,10 @@ export function AppChrome({ children }: { children: ReactNode }) {
                       </div>
                     </div>
 
-                    <DropdownMenuItem
-                      onClick={() =>
-                        window.location.assign(`${consoleBaseURL}/auth/select-account`)
-                      }
-                    >
-                      <ArrowRightLeftIcon className="text-muted-foreground" />
-                      Switch Account
-                    </DropdownMenuItem>
+                    <AccountSwitcherSubmenu
+                      currentUserId={session.user.id}
+                      consoleBaseURL={consoleBaseURL}
+                    />
                   </DropdownMenuGroup>
 
                   <DropdownMenuSeparator />
