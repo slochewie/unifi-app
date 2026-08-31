@@ -5,7 +5,6 @@ import {
 } from "@tanstack/react-router"
 
 import { AppChrome } from "#/components/app-chrome.tsx"
-import { ThemeInitializer } from "#/components/theme-switcher.tsx"
 
 import appCss from "../styles.css?url"
 
@@ -14,6 +13,22 @@ import type { QueryClient } from "@tanstack/react-query"
 interface MyRouterContext {
   queryClient: QueryClient
 }
+
+const themeInitScript = `
+(() => {
+  try {
+    const stored = localStorage.getItem('unifi-app-theme')
+    const theme = stored === 'light' || stored === 'dark' || stored === 'system'
+      ? stored
+      : 'system'
+    const dark = theme === 'dark' ||
+      (theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)
+
+    document.documentElement.classList.toggle('dark', dark)
+    document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
+  } catch {}
+})()
+`
 
 export const Route = createRootRouteWithContext<MyRouterContext>()({
   head: () => ({
@@ -41,12 +56,12 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
         <HeadContent />
       </head>
       <body>
-        <ThemeInitializer />
         <AppChrome>{children}</AppChrome>
         <Scripts />
       </body>
