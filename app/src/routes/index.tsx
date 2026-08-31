@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router"
 import {
   ActivityIcon,
   CableIcon,
+  ChevronDownIcon,
   CloudCogIcon,
   EthernetPortIcon,
   GaugeIcon,
@@ -13,6 +14,7 @@ import {
 } from "lucide-react"
 
 import { Badge } from "#/components/ui/badge.tsx"
+import { Button } from "#/components/ui/button.tsx"
 import {
   Card,
   CardContent,
@@ -31,6 +33,7 @@ type SiteStatus = {
   name: string
   siteMagic: string
   internet: string
+  wanUptime: number | null
   lteFailover: "Ready" | "Unavailable"
   gateway: string
   publicIp: string
@@ -94,16 +97,39 @@ function StatusRow({
   )
 }
 
+function UptimeBar({ value }: { value: number | null }) {
+  const displayValue = value === null ? null : Math.min(100, Math.max(0, value))
+
+  return (
+    <div className="mt-3 space-y-1.5">
+      <div className="flex items-center justify-between gap-3 text-xs">
+        <span className="text-muted-foreground">Connection uptime</span>
+        <span className="font-medium tabular-nums">
+          {displayValue === null ? "—" : `${displayValue.toFixed(2)}%`}
+        </span>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-muted">
+        <div
+          className="h-full rounded-full bg-emerald-500 transition-[width] duration-500"
+          style={{ width: `${displayValue ?? 0}%` }}
+        />
+      </div>
+    </div>
+  )
+}
+
 function SiteCard({ site }: { site: SiteStatus }) {
+  const [detailsOpen, setDetailsOpen] = useState(false)
   const healthy = site.internet === "Healthy" && site.offlineDevices === 0
 
   return (
     <Card className="overflow-hidden">
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <CardTitle className="truncate text-lg">{site.name}</CardTitle>
             <CardDescription>UniFi Network</CardDescription>
+            <UptimeBar value={site.wanUptime} />
           </div>
           <Badge variant={healthy ? "secondary" : "destructive"}>
             {healthy ? "Healthy" : "Attention"}
@@ -120,19 +146,34 @@ function SiteCard({ site }: { site: SiteStatus }) {
           <StatusRow label="Public IP" value={site.publicIp} icon={CableIcon} />
         </div>
 
-        <Separator className="my-3" />
+        <Separator className="mt-3" />
 
-        <div className="grid grid-cols-2 gap-x-5 gap-y-3">
-          {metrics.map(({ key, label, icon: Icon }) => (
-            <div key={key} className="min-w-0">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Icon className="size-3.5 shrink-0" />
-                <span className="truncate">{label}</span>
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-10 w-full justify-between px-0 text-sm text-muted-foreground hover:bg-transparent hover:text-foreground"
+          aria-expanded={detailsOpen}
+          onClick={() => setDetailsOpen((open) => !open)}
+        >
+          Details
+          <ChevronDownIcon
+            className={`size-4 transition-transform ${detailsOpen ? "rotate-180" : ""}`}
+          />
+        </Button>
+
+        {detailsOpen ? (
+          <div className="grid grid-cols-2 gap-x-5 gap-y-3 pb-1 pt-1">
+            {metrics.map(({ key, label, icon: Icon }) => (
+              <div key={key} className="min-w-0">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Icon className="size-3.5 shrink-0" />
+                  <span className="truncate">{label}</span>
+                </div>
+                <div className="mt-1 text-xl font-semibold tabular-nums">{site[key]}</div>
               </div>
-              <div className="mt-1 text-xl font-semibold tabular-nums">{site[key]}</div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   )
