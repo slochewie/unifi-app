@@ -33,7 +33,7 @@ type SiteStatus = {
   name: string
   siteMagic: string
   internet: string
-  wanUptime: number | null
+  wanUptime?: number | null
   lteFailover: "Ready" | "Unavailable"
   gateway: string
   publicIp: string
@@ -97,8 +97,11 @@ function StatusRow({
   )
 }
 
-function UptimeBar({ value }: { value: number | null }) {
-  const displayValue = value === null ? null : Math.min(100, Math.max(0, value))
+function UptimeBar({ value }: { value?: number | null }) {
+  const displayValue =
+    typeof value === "number" && Number.isFinite(value)
+      ? Math.min(100, Math.max(0, value))
+      : null
 
   return (
     <div className="mt-3 space-y-1.5">
