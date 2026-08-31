@@ -61,15 +61,18 @@ const metrics = [
   { key: "offlineDevices", label: "Offline Devices", icon: CableIcon },
 ] as const
 
+const siteGridClassName =
+  "grid grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))] gap-4"
+
 function SessionSkeleton() {
   return (
     <main className="flex-1 p-4 md:p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
+      <div className="w-full space-y-6">
         <div className="space-y-2">
           <Skeleton className="h-8 w-64" />
           <Skeleton className="h-4 w-full max-w-xl" />
         </div>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className={siteGridClassName}>
           {Array.from({ length: 5 }).map((_, index) => (
             <Skeleton key={index} className="h-96 w-full rounded-xl" />
           ))}
@@ -126,7 +129,7 @@ function SiteCard({ site }: { site: SiteStatus }) {
   const healthy = site.internet === "Healthy" && site.offlineDevices === 0
 
   return (
-    <Card className="overflow-hidden">
+    <Card className="min-w-0 overflow-hidden">
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
@@ -248,7 +251,7 @@ function NetworkStatusPage() {
 
   return (
     <main className="flex-1 p-4 md:p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
+      <div className="w-full space-y-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Network Status</h1>
@@ -267,7 +270,7 @@ function NetworkStatusPage() {
         </div>
 
         {status?.sites?.length ? (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className={siteGridClassName}>
             {status.sites.map((site) => (
               <SiteCard key={site.id} site={site} />
             ))}
