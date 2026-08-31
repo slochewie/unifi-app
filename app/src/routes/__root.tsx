@@ -5,6 +5,7 @@ import {
 } from "@tanstack/react-router"
 
 import { AppChrome } from "#/components/app-chrome.tsx"
+import { ThemeInitializer } from "#/components/theme-switcher.tsx"
 
 import appCss from "../styles.css?url"
 
@@ -45,6 +46,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body>
+        <ThemeInitializer />
         <AppChrome>{children}</AppChrome>
         <Scripts />
       </body>
