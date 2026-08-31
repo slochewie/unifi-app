@@ -12,6 +12,9 @@ dist/
 .env.*
 !.env.example
 
+# Local secrets
+secrets/
+
 # Logs
 *.log
 npm-debug.log*
