@@ -104,14 +104,14 @@ function UptimeBar({ value }: { value?: number | null }) {
       : null
 
   return (
-    <div className="mt-3 space-y-1.5">
+    <div className="mt-3 w-full space-y-1.5">
       <div className="flex items-center justify-between gap-3 text-xs">
         <span className="text-muted-foreground">Connection uptime</span>
         <span className="font-medium tabular-nums">
           {displayValue === null ? "—" : `${displayValue.toFixed(2)}%`}
         </span>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-muted">
+      <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
         <div
           className="h-full rounded-full bg-emerald-500 transition-[width] duration-500"
           style={{ width: `${displayValue ?? 0}%` }}
@@ -132,12 +132,12 @@ function SiteCard({ site }: { site: SiteStatus }) {
           <div className="min-w-0 flex-1">
             <CardTitle className="truncate text-lg">{site.name}</CardTitle>
             <CardDescription>UniFi Network</CardDescription>
-            <UptimeBar value={site.wanUptime} />
           </div>
           <Badge variant={healthy ? "secondary" : "destructive"}>
             {healthy ? "Healthy" : "Attention"}
           </Badge>
         </div>
+        <UptimeBar value={site.wanUptime} />
       </CardHeader>
 
       <CardContent>
