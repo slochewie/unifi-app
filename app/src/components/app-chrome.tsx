@@ -66,14 +66,14 @@ function getAppLinks() {
     return {
       console: "https://console.mccarthysirishpub.com/",
       counter: "https://counter.mccarthysirishpub.com",
-      tipCalculator: "https://tip-calculator.mccarthysirishpub.com/app",
+      tipCalculator: "https://tip-calculator.mccarthysirishpub.com",
     }
   }
 
   return {
     console: "https://console.niteowl.dev",
     counter: "https://counter.niteowl.dev",
-    tipCalculator: "https://tip-calculator.niteowl.dev/app",
+    tipCalculator: "https://tip-calculator.niteowl.dev",
   }
 }
 
