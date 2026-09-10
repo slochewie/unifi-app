@@ -7,6 +7,7 @@ import {
   CloudCogIcon,
   EthernetPortIcon,
   GaugeIcon,
+  NetworkIcon,
   RadioTowerIcon,
   RouterIcon,
   ShieldAlertIcon,
@@ -87,11 +88,16 @@ function StatusLoadingSkeleton() {
     <main className="flex-1 p-4 md:p-6">
       <div className="w-full space-y-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Network Status</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Live UniFi health and device status across NiteOwl-managed venues.
-            </p>
+          <div className="flex items-start gap-3">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-full border bg-card text-muted-foreground shadow-sm">
+              <NetworkIcon className="size-5" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight">Network Status</h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Live UniFi health and device status across NiteOwl-managed venues.
+              </p>
+            </div>
           </div>
           <Skeleton className="h-6 w-36 rounded-full" />
         </div>
@@ -282,11 +288,16 @@ function NetworkStatusPage() {
     <main className="flex-1 p-4 md:p-6">
       <div className="w-full space-y-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Network Status</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Live UniFi health and device status across NiteOwl-managed venues.
-            </p>
+          <div className="flex items-start gap-3">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-full border bg-card text-muted-foreground shadow-sm">
+              <NetworkIcon className="size-5" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight">Network Status</h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Live UniFi health and device status across NiteOwl-managed venues.
+              </p>
+            </div>
           </div>
           <Badge variant={statusError ? "destructive" : "outline"} className="w-fit">
             <CloudCogIcon />
