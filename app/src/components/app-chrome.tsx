@@ -15,6 +15,7 @@ import {
 } from "lucide-react"
 
 import { AccountSwitcherSubmenu } from "#/components/account-switcher-submenu.tsx"
+import { OrganizationHeaderSelector } from "#/components/organization-header-selector.tsx"
 import { ThemeMenuControl } from "#/components/theme-switcher.tsx"
 import {
   Avatar,
@@ -257,6 +258,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
             </div>
 
             <div className="ml-auto flex min-w-0 items-center gap-2">
+              <OrganizationHeaderSelector />
               <DropdownMenu>
                 <DropdownMenuTrigger
                   className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
