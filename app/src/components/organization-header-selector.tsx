@@ -42,7 +42,7 @@ export function OrganizationHeaderSelector() {
       organizations={organizations ?? []}
       value={activeOrganization?.id}
       loading={areOrganizationsPending || isActiveOrganizationPending}
-      className="hidden min-w-0 w-48 sm:block lg:w-56"
+      className="w-28 min-w-0 sm:w-48 lg:w-56"
       onValueChange={(organizationId) => {
         void authClient.organization.setActive({ organizationId })
       }}
