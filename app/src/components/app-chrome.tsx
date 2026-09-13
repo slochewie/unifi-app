@@ -66,7 +66,7 @@ function getAppLinks() {
   if (isMccarthysDomain) {
     return {
       console: "https://console.mccarthysirishpub.com/",
-      "tip-calculator": "https://tips.mccarthysirishpub.com",
+      "tip-calculator": "https://tip-calculator.mccarthysirishpub.com",
       counter: "https://counter.mccarthysirishpub.com",
       "network-status": "https://unifi.mccarthysirishpub.com",
     }
