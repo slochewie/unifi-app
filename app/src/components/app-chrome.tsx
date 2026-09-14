@@ -78,11 +78,6 @@ function getSidebarDefaultOpen() {
   return sidebarState !== "false"
 }
 
-const sidebarButtonClassName =
-  "text-base [&>svg]:size-5 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2"
-const sidebarLabelClassName =
-  "truncate group-data-[collapsible=icon]:hidden"
-
 function SidebarIdentityToggle({
   href,
   brand,
@@ -151,13 +146,12 @@ export function AppChrome({ children }: { children: ReactNode }) {
                     {primarySection.items.map((item) => (
                       <SidebarMenuItem key={item.id}>
                         <SidebarMenuButton
-                          className={sidebarButtonClassName}
                           isActive={item.active}
                           tooltip={item.label}
                           onClick={() => window.location.assign(item.href)}
                         >
                           <NiteOwlNavigationIcon icon={item.icon} />
-                          <span className={sidebarLabelClassName}>{item.label}</span>
+                          <span>{item.label}</span>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
                     ))}
@@ -178,12 +172,11 @@ export function AppChrome({ children }: { children: ReactNode }) {
                     {appsSection.items.map((item) => (
                       <SidebarMenuItem key={item.id}>
                         <SidebarMenuButton
-                          className={sidebarButtonClassName}
                           tooltip={item.label}
                           onClick={() => window.location.assign(item.href)}
                         >
                           <NiteOwlNavigationIcon icon={item.icon} />
-                          <span className={sidebarLabelClassName}>{item.label}</span>
+                          <span>{item.label}</span>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
                     ))}
@@ -201,31 +194,28 @@ export function AppChrome({ children }: { children: ReactNode }) {
                   <SidebarMenu>
                     <SidebarMenuItem>
                       <SidebarMenuButton
-                        className={sidebarButtonClassName}
                         tooltip="Account"
                         onClick={() =>
                           window.location.assign(`${consoleBaseURL}/settings/account`)
                         }
                       >
                         <UserCircleIcon />
-                        <span className={sidebarLabelClassName}>Account</span>
+                        <span>Account</span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                     <SidebarMenuItem>
                       <SidebarMenuButton
-                        className={sidebarButtonClassName}
                         tooltip="Security"
                         onClick={() =>
                           window.location.assign(`${consoleBaseURL}/settings/security`)
                         }
                       >
                         <ShieldCheckIcon />
-                        <span className={sidebarLabelClassName}>Security</span>
+                        <span>Security</span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                     <SidebarMenuItem>
                       <SidebarMenuButton
-                        className={sidebarButtonClassName}
                         tooltip="Organizations"
                         onClick={() =>
                           window.location.assign(
@@ -234,7 +224,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
                         }
                       >
                         <Building2Icon />
-                        <span className={sidebarLabelClassName}>Organizations</span>
+                        <span>Organizations</span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   </SidebarMenu>
