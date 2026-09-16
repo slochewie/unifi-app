@@ -10,6 +10,7 @@ type SiteConfig = { siteId: string; names: string[] }
 type FirewallZone = { id: string; name: string; networkIds?: string[] }
 type Network = {
   id: string
+  name?: string
   zoneId?: string
   ipv4Configuration?: { hostIpAddress?: string; prefixLength?: number }
 }
@@ -32,6 +33,8 @@ type FirewallPolicy = {
   ipProtocolScope?: { ipVersion?: string; protocolFilter?: unknown }
 }
 type LegacyNetwork = {
+  _id?: string
+  external_id?: string
   name?: string
   purpose?: string
   wan_networkgroup?: string
@@ -43,18 +46,12 @@ type LegacyNetwork = {
     download_kilobits_per_second?: number
   }
 }
-type TrafficRule = {
+type QosRule = Record<string, unknown> & {
   _id?: string
   id?: string
   enabled?: boolean
   description?: string
   name?: string
-  network_ids?: string[]
-  matching_target?: string
-  bandwidth_limit?: {
-    download_limit_kbps?: number
-    upload_limit_kbps?: number
-  }
 }
 
 const SITE_CONFIG: SiteConfig[] = [
@@ -149,9 +146,26 @@ function isPrimaryWan(network: LegacyNetwork) {
   if (network.purpose !== "wan" || network.wan_load_balance_type === "failover-only") return false
   return network.wan_networkgroup === "WAN" || network.wan_failover_priority === 1
 }
-function ruleTargetsSelectedNetwork(rule: TrafficRule, networkIds: Set<string>) {
+
+function collectStrings(value: unknown, result = new Set<string>()) {
+  if (typeof value === "string") {
+    result.add(value)
+    return result
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectStrings(item, result)
+    return result
+  }
+  if (value && typeof value === "object") {
+    for (const item of Object.values(value)) collectStrings(item, result)
+  }
+  return result
+}
+
+function qosRuleTargetsSelectedNetwork(rule: QosRule, networkReferences: Set<string>) {
   if (rule.enabled === false) return false
-  return rule.network_ids?.some((networkId) => networkIds.has(networkId)) ?? false
+  const values = collectStrings(rule)
+  return [...networkReferences].some((reference) => values.has(reference))
 }
 
 async function handleToastPolicy(request: Request) {
@@ -213,23 +227,40 @@ async function handleToastPolicy(request: Request) {
 
     const localSite = encodeURIComponent(resolved.localSite.internalReference || "default")
     const localBase = connectorRoot(resolved.hostId)
-    const [legacyNetworkResponse, trafficRuleResponse] = await Promise.all([
+    const [legacyNetworkResponse, qosRuleResponse] = await Promise.all([
       unifiFetch<ListResponse<LegacyNetwork>>(`${localBase}/api/s/${localSite}/rest/networkconf`, apiKey),
-      unifiFetch<ListResponse<TrafficRule>>(`${localBase}/v2/api/site/${localSite}/trafficrules`, apiKey),
+      unifiFetch<ListResponse<QosRule>>(`${localBase}/v2/api/site/${localSite}/qos-rules`, apiKey),
     ])
     const legacyNetworks = listData(legacyNetworkResponse)
-    const trafficRules = listData(trafficRuleResponse)
+    const qosRules = listData(qosRuleResponse)
     const primaryWan = legacyNetworks.find(isPrimaryWan) ?? legacyNetworks.find((network) =>
       network.purpose === "wan" && network.wan_load_balance_type !== "failover-only",
     ) ?? null
-    const activeTrafficRules = trafficRules.filter((rule) => rule.enabled !== false)
-    const toastTrafficRules = activeTrafficRules.filter((rule) => ruleTargetsSelectedNetwork(rule, networkIds))
+
+    const networkReferences = new Set<string>(networkIds)
+    for (const network of networkSummaries) {
+      if (network.name) networkReferences.add(network.name)
+    }
+    for (const legacyNetwork of legacyNetworks) {
+      if (legacyNetwork.external_id && networkIds.has(legacyNetwork.external_id)) {
+        if (legacyNetwork._id) networkReferences.add(legacyNetwork._id)
+        if (legacyNetwork.name) networkReferences.add(legacyNetwork.name)
+      }
+    }
+
+    const activeQosRules = qosRules.filter((rule) => rule.enabled !== false)
+    const toastQosRules = activeQosRules.filter((rule) => qosRuleTargetsSelectedNetwork(rule, networkReferences))
     const wanCapabilities = primaryWan?.wan_provider_capabilities
     const wanDownloadMbps = wanCapabilities?.download_kilobits_per_second !== undefined
       ? wanCapabilities.download_kilobits_per_second / 1000
       : null
     const wanUploadMbps = wanCapabilities?.upload_kilobits_per_second !== undefined
       ? wanCapabilities.upload_kilobits_per_second / 1000
+      : null
+    const recommendedDownloadMbps = 15
+    const recommendedUploadMbps = 5
+    const wanCapacityMeetsRecommendation = wanDownloadMbps !== null && wanUploadMbps !== null
+      ? wanDownloadMbps >= recommendedDownloadMbps && wanUploadMbps >= recommendedUploadMbps
       : null
 
     return Response.json({
@@ -241,24 +272,24 @@ async function handleToastPolicy(request: Request) {
       icmpEchoRepliesUnrestricted,
       toastFirewallAllowlistReachable: unrestrictedOutbound,
       qos: {
-        configuredForToast: toastTrafficRules.length > 0,
-        activeTrafficRuleCount: activeTrafficRules.length,
-        toastTrafficRuleCount: toastTrafficRules.length,
+        configuredForToast: toastQosRules.length > 0,
+        activeQosRuleCount: activeQosRules.length,
+        toastQosRuleCount: toastQosRules.length,
         smartQueuesEnabled: primaryWan?.wan_smartq_enabled ?? null,
         wanName: primaryWan?.name ?? null,
         wanDownloadMbps,
         wanUploadMbps,
-        recommendedDownloadMbps: 15,
-        recommendedUploadMbps: 5,
+        wanCapacityMeetsRecommendation,
+        recommendedDownloadMbps,
+        recommendedUploadMbps,
       },
       evidence: {
         outboundPolicies: outboundPolicies.map((policy) => ({ name: policy.name, index: policy.index ?? null, action: policy.action?.type ?? null })),
         returnPolicies: returnPolicies.map((policy) => ({ name: policy.name, index: policy.index ?? null, action: policy.action?.type ?? null, allowReturnTraffic: policy.action?.allowReturnTraffic ?? false })),
         restrictingOutboundPolicies: restrictingOutboundPolicies.map((policy) => policy.name),
-        toastTrafficRules: toastTrafficRules.map((rule) => ({
-          id: rule._id ?? rule.id ?? null,
-          name: rule.description ?? rule.name ?? "Traffic rule",
-          bandwidthLimit: rule.bandwidth_limit ?? null,
+        toastQosRules: toastQosRules.map((rule) => ({
+          id: typeof rule._id === "string" ? rule._id : typeof rule.id === "string" ? rule.id : null,
+          name: typeof rule.name === "string" ? rule.name : typeof rule.description === "string" ? rule.description : "QoS rule",
         })),
       },
     })
