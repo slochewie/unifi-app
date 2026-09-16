@@ -25,14 +25,30 @@ type WifiBroadcast = {
   securityType: string | null
 }
 
+type Client = {
+  mac: string | null
+  name: string | null
+  ipAddress: string | null
+  wired: boolean | null
+  ssid: string | null
+  signalDbm: number | null
+  accessPointMac: string | null
+  switchMac: string | null
+  switchPort: number | null
+  uplinkName: string | null
+  qosPolicyApplied: boolean | null
+}
+
 type Network = {
   id: string
   name: string
   vlanId: number | null
   isolationEnabled: boolean | null
   internetAccessEnabled: boolean | null
+  mdnsEnabled: boolean | null
   mdnsForwardingEnabled: boolean | null
   wifiBroadcasts?: WifiBroadcast[]
+  clients?: Client[]
 }
 
 type Zone = {
@@ -163,6 +179,11 @@ function buildRequirements(zone: Zone | null): Requirement[] {
   const networks = zone?.networks ?? []
   const broadcasts = networks.flatMap((network) => network.wifiBroadcasts ?? [])
   const enabledBroadcasts = broadcasts.filter((broadcast) => broadcast.enabled !== false)
+  const clients = networks.flatMap((network) => network.clients ?? [])
+  const wirelessClients = clients.filter((client) => client.wired === false)
+  const clientsWithSignal = wirelessClients.filter(
+    (client): client is Client & { signalDbm: number } => client.signalDbm !== null,
+  )
 
   const dedicatedVlan: Status = !zone
     ? "unknown"
@@ -186,7 +207,7 @@ function buildRequirements(zone: Zone | null): Requirement[] {
 
   const wpa2: Status = enabledBroadcasts.length === 0
     ? "unknown"
-    : enabledBroadcasts.every((broadcast) => broadcast.securityType === "WPA2_PERSONAL")
+    : enabledBroadcasts.every((broadcast) => broadcast.securityType === "WPA2_AES_PERSONAL")
       ? "pass"
       : "fail"
 
@@ -197,23 +218,37 @@ function buildRequirements(zone: Zone | null): Requirement[] {
       ? "pass"
       : "fail"
 
-  const mdnsValues = networks.map((network) => network.mdnsForwardingEnabled)
+  const mdnsValues = networks.map((network) => network.mdnsEnabled)
   const mdns: Status = mdnsValues.length === 0 || mdnsValues.some((value) => value === null)
     ? "unknown"
     : mdnsValues.every((value) => value === true)
       ? "pass"
       : "fail"
 
+  const signal: Status = wirelessClients.length === 0 || clientsWithSignal.length !== wirelessClients.length
+    ? "unknown"
+    : clientsWithSignal.every((client) => client.signalDbm >= -65)
+      ? "pass"
+      : "fail"
+
+  const signalDetail = wirelessClients.length === 0
+    ? "No wireless clients are currently connected to the selected network."
+    : clientsWithSignal.length > 0
+      ? clientsWithSignal
+          .map((client) => `${client.name ?? client.mac ?? "Client"}: ${client.signalDbm} dBm`)
+          .join(", ")
+      : undefined
+
   return [
     { label: "Dedicated Toast VLAN", source: "UniFi network", status: dedicatedVlan, detail: networks.length > 0 ? networks.map((network) => `${network.name} · VLAN ${network.vlanId ?? "none"}`).join(", ") : undefined },
-    { label: "Non-Toast devices excluded from Toast VLAN", source: "UniFi clients", status: "unknown" },
-    { label: "Physical Ethernet ports mapped to Toast VLAN", source: "UniFi switching", status: "unknown" },
+    { label: "Non-Toast devices excluded from Toast VLAN", source: "UniFi clients", status: "unknown", detail: clients.length > 0 ? `${clients.length} client${clients.length === 1 ? "" : "s"} currently observed on the selected network; device purpose cannot be proven automatically.` : "No clients are currently observed on the selected network." },
+    { label: "Physical Ethernet ports mapped to Toast VLAN", source: "UniFi switching", status: "unknown", detail: "Explicit port overrides are not a complete effective-port configuration; inherited port settings are not treated as pass or fail." },
     { label: "Bonjour / mDNS enabled", source: "UniFi network", status: mdns },
     { label: "Client isolation disabled", source: "UniFi WiFi", status: clientIsolation },
     { label: "Toast SSID mapped to Toast VLAN", source: "UniFi WiFi", status: ssidMapped, detail: enabledBroadcasts.map((broadcast) => broadcast.name).join(", ") || undefined },
     { label: "5 GHz wireless", source: "UniFi WiFi", status: fiveGhz, detail: enabledBroadcasts.map((broadcast) => `${broadcast.name}: ${broadcast.frequenciesGHz.join(" / ")} GHz`).join(", ") || undefined },
     { label: "WPA2/AES Personal encryption", source: "UniFi WiFi", status: wpa2, detail: enabledBroadcasts.map((broadcast) => `${broadcast.name}: ${formatSecurity(broadcast.securityType)}`).join(", ") || undefined },
-    { label: "Wireless signal remains at or above -65 dBm", source: "UniFi clients", status: "unknown" },
+    { label: "Wireless signal remains at or above -65 dBm", source: "UniFi clients", status: signal, detail: signalDetail },
     { label: "ICMP echo replies unrestricted", source: "UniFi policy", status: "unknown" },
     { label: "Toast firewall destinations and ports allowed", source: "Firewall policy", status: "unknown" },
     { label: "QoS provides sufficient Toast bandwidth", source: "UniFi traffic policy", status: "unknown" },
