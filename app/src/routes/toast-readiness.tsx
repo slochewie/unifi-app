@@ -284,27 +284,27 @@ function buildRequirements(zone: Zone | null, policy: PolicyResponse | null): Re
           .join(", ")
       : undefined
 
-  const policyReady = policy?.zoneId === zone?.id && !policy.error
+  const policyReady = Boolean(policy && zone && policy.zoneId === zone.id && !policy.error)
   const icmp: Status = !policyReady
     ? "unknown"
-    : policy.icmpEchoRepliesUnrestricted === true
+    : policy?.icmpEchoRepliesUnrestricted === true
       ? "pass"
       : "fail"
   const firewall: Status = !policyReady
     ? "unknown"
-    : policy.toastFirewallAllowlistReachable === true
+    : policy?.toastFirewallAllowlistReachable === true
       ? "pass"
       : "fail"
   const firewallDetail = !policyReady
     ? policy?.error
-    : policy.toastFirewallAllowlistReachable
+    : policy?.toastFirewallAllowlistReachable
       ? "Selected zone has unrestricted outbound Internet access; Toast's required destinations and ports are not blocked by UniFi zone policy."
-      : policy.evidence?.restrictingOutboundPolicies?.length
+      : policy?.evidence?.restrictingOutboundPolicies?.length
         ? `Restricting outbound policies: ${policy.evidence.restrictingOutboundPolicies.join(", ")}`
         : "UniFi policy does not prove unrestricted outbound access."
   const icmpDetail = !policyReady
     ? policy?.error
-    : policy.icmpEchoRepliesUnrestricted
+    : policy?.icmpEchoRepliesUnrestricted
       ? "Outbound traffic is unrestricted and return traffic is allowed by the External → selected-zone policy."
       : "UniFi policy does not prove unrestricted ICMP echo replies."
 
