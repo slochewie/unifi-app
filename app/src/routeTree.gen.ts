@@ -10,33 +10,79 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ToastReadinessRouteImport } from './routes/toast-readiness'
+import { Route as ZonesRouteImport } from './routes/zones'
+import { Route as ApiStatusRouteImport } from './routes/api/status'
+import { Route as ApiZonesRouteImport } from './routes/api/zones'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ToastReadinessRoute = ToastReadinessRouteImport.update({
+  id: '/toast-readiness',
+  path: '/toast-readiness',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ZonesRoute = ZonesRouteImport.update({
+  id: '/zones',
+  path: '/zones',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiStatusRoute = ApiStatusRouteImport.update({
+  id: '/api/status',
+  path: '/api/status',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiZonesRoute = ApiZonesRouteImport.update({
+  id: '/api/zones',
+  path: '/api/zones',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/toast-readiness': typeof ToastReadinessRoute
+  '/zones': typeof ZonesRoute
+  '/api/status': typeof ApiStatusRoute
+  '/api/zones': typeof ApiZonesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/toast-readiness': typeof ToastReadinessRoute
+  '/zones': typeof ZonesRoute
+  '/api/status': typeof ApiStatusRoute
+  '/api/zones': typeof ApiZonesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/toast-readiness': typeof ToastReadinessRoute
+  '/zones': typeof ZonesRoute
+  '/api/status': typeof ApiStatusRoute
+  '/api/zones': typeof ApiZonesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/toast-readiness' | '/zones' | '/api/status' | '/api/zones'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/toast-readiness' | '/zones' | '/api/status' | '/api/zones'
+  id:
+    | '__root__'
+    | '/'
+    | '/toast-readiness'
+    | '/zones'
+    | '/api/status'
+    | '/api/zones'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ToastReadinessRoute: typeof ToastReadinessRoute
+  ZonesRoute: typeof ZonesRoute
+  ApiStatusRoute: typeof ApiStatusRoute
+  ApiZonesRoute: typeof ApiZonesRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,12 +94,53 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/toast-readiness': {
+      id: '/toast-readiness'
+      path: '/toast-readiness'
+      fullPath: '/toast-readiness'
+      preLoaderRoute: typeof ToastReadinessRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/zones': {
+      id: '/zones'
+      path: '/zones'
+      fullPath: '/zones'
+      preLoaderRoute: typeof ZonesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/status': {
+      id: '/api/status'
+      path: '/api/status'
+      fullPath: '/api/status'
+      preLoaderRoute: typeof ApiStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/zones': {
+      id: '/api/zones'
+      path: '/api/zones'
+      fullPath: '/api/zones'
+      preLoaderRoute: typeof ApiZonesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ToastReadinessRoute: ToastReadinessRoute,
+  ZonesRoute: ZonesRoute,
+  ApiStatusRoute: ApiStatusRoute,
+  ApiZonesRoute: ApiZonesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+  }
+}
