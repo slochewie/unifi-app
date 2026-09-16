@@ -114,31 +114,40 @@ function ZonesPage() {
         />
 
         {selectedZone ? (
-          <div className="grid gap-4 lg:grid-cols-2">
-            {selectedZone.networks.map((network) => (
-              <Card key={network.id}>
-                <CardHeader>
-                  <div className="flex items-center gap-2"><NetworkIcon className="size-5 text-muted-foreground" /><CardTitle>{network.name}</CardTitle></div>
-                  <CardDescription>{network.subnet ?? "Subnet unavailable"}</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4 text-sm">
-                  <dl className="grid grid-cols-[8rem_1fr] gap-x-4 gap-y-2">
-                    <dt className="text-muted-foreground">VLAN ID</dt><dd>{network.vlanId ?? "—"}</dd>
-                    <dt className="text-muted-foreground">Subnet</dt><dd>{network.subnet ?? "—"}</dd>
-                    <dt className="text-muted-foreground">Gateway</dt><dd>{network.gateway ?? "—"}</dd>
-                    <dt className="text-muted-foreground">DNS</dt><dd>{network.dns?.join(", ") || "Automatic"}</dd>
-                    <dt className="text-muted-foreground">DHCP range</dt><dd>{network.dhcpStart && network.dhcpEnd ? `${network.dhcpStart} – ${network.dhcpEnd}` : "—"}</dd>
-                  </dl>
-                  <div>
-                    <div className="mb-2 flex items-center gap-2 font-medium"><WifiIcon className="size-4" />SSIDs</div>
-                    <p className="text-muted-foreground">{network.ssids?.join(", ") || "No SSIDs mapped"}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          selectedZone.networks.length > 0 ? (
+            <div className="grid gap-4 lg:grid-cols-2">
+              {selectedZone.networks.map((network) => (
+                <Card key={network.id}>
+                  <CardHeader>
+                    <div className="flex items-center gap-2"><NetworkIcon className="size-5 text-muted-foreground" /><CardTitle>{network.name}</CardTitle></div>
+                    <CardDescription>{network.subnet ?? "Subnet unavailable"}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4 text-sm">
+                    <dl className="grid grid-cols-[8rem_1fr] gap-x-4 gap-y-2">
+                      <dt className="text-muted-foreground">VLAN ID</dt><dd>{network.vlanId ?? "—"}</dd>
+                      <dt className="text-muted-foreground">Subnet</dt><dd>{network.subnet ?? "—"}</dd>
+                      <dt className="text-muted-foreground">Gateway</dt><dd>{network.gateway ?? "—"}</dd>
+                      <dt className="text-muted-foreground">DNS</dt><dd>{network.dns?.join(", ") || "Automatic"}</dd>
+                      <dt className="text-muted-foreground">DHCP range</dt><dd>{network.dhcpStart && network.dhcpEnd ? `${network.dhcpStart} – ${network.dhcpEnd}` : "—"}</dd>
+                    </dl>
+                    <div>
+                      <div className="mb-2 flex items-center gap-2 font-medium"><WifiIcon className="size-4" />SSIDs</div>
+                      <p className="text-muted-foreground">{network.ssids?.join(", ") || "No SSIDs mapped"}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>{selectedZone.name}</CardTitle>
+                <CardDescription>No networks are assigned to this UniFi zone.</CardDescription>
+              </CardHeader>
+            </Card>
+          )
         ) : !loading ? (
-          <Card><CardHeader><CardTitle>No zone selected</CardTitle><CardDescription>{data.error ?? "No UniFi zones with networks were returned for this organization."}</CardDescription></CardHeader></Card>
+          <Card><CardHeader><CardTitle>No zone selected</CardTitle><CardDescription>{data.error ?? "No UniFi zones were returned for this organization."}</CardDescription></CardHeader></Card>
         ) : null}
       </div>
     </main>
