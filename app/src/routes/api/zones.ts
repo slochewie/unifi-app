@@ -227,7 +227,15 @@ async function handleZones(request: Request) {
       unifiFetch<Page<WifiBroadcast>>(`${sitePath}/wifi/broadcasts?offset=0&limit=200`, apiKey),
     ])
 
-    const networks = networkPage.data ?? []
+    const networkSummaries = networkPage.data ?? []
+    const networks = await Promise.all(
+      networkSummaries.map((network) =>
+        unifiFetch<Network>(
+          `${sitePath}/networks/${encodeURIComponent(network.id)}`,
+          apiKey,
+        ),
+      ),
+    )
     const firewallZones = zonePage.data ?? []
     const wifi = wifiPage.data ?? []
     const knownNetworkIds = new Set<string>()
