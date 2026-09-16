@@ -68,8 +68,26 @@ type PolicyResponse = {
   returnTrafficAllowed?: boolean
   icmpEchoRepliesUnrestricted?: boolean
   toastFirewallAllowlistReachable?: boolean
+  qos?: {
+    configuredForToast?: boolean
+    activeTrafficRuleCount?: number
+    toastTrafficRuleCount?: number
+    smartQueuesEnabled?: boolean | null
+    wanDownloadMbps?: number | null
+    wanUploadMbps?: number | null
+    recommendedDownloadMbps?: number
+    recommendedUploadMbps?: number
+  }
   evidence?: {
     restrictingOutboundPolicies?: string[]
+    toastTrafficRules?: Array<{
+      id?: string | null
+      name?: string
+      bandwidthLimit?: {
+        download_limit_kbps?: number
+        upload_limit_kbps?: number
+      } | null
+    }>
   }
   error?: string
 }
@@ -158,7 +176,7 @@ function ToastReadinessPage() {
         setPolicy(response.ok ? body : { error: body.error ?? `Unable to evaluate policy (${response.status})` })
       })
       .catch(() => {
-        if (!cancelled) setPolicy({ error: "Unable to evaluate UniFi firewall policy" })
+        if (!cancelled) setPolicy({ error: "Unable to evaluate UniFi firewall and QoS policy" })
       })
 
     return () => {
@@ -308,6 +326,22 @@ function buildRequirements(zone: Zone | null, policy: PolicyResponse | null): Re
       ? "Outbound traffic is unrestricted and return traffic is allowed by the External → selected-zone policy."
       : "UniFi policy does not prove unrestricted ICMP echo replies."
 
+  const qos = policy?.qos
+  const qosStatus: Status = !policyReady || qos?.configuredForToast === undefined
+    ? "unknown"
+    : qos.configuredForToast
+      ? "pass"
+      : "fail"
+  const wanCapacity = qos?.wanDownloadMbps !== null && qos?.wanDownloadMbps !== undefined &&
+      qos?.wanUploadMbps !== null && qos?.wanUploadMbps !== undefined
+    ? `${qos.wanDownloadMbps} Mbps down / ${qos.wanUploadMbps} Mbps up reported WAN capacity`
+    : "WAN capacity unavailable"
+  const qosDetail = !policyReady
+    ? policy?.error
+    : qos?.configuredForToast
+      ? `${qos.toastTrafficRuleCount ?? 0} Toast-targeted UniFi traffic rule${qos.toastTrafficRuleCount === 1 ? "" : "s"} detected; ${wanCapacity}.`
+      : `No Toast-targeted UniFi traffic rule is configured. ${wanCapacity}; Toast recommends ${qos?.recommendedDownloadMbps ?? 15} Mbps down / ${qos?.recommendedUploadMbps ?? 5} Mbps up dedicated to Toast.`
+
   return [
     { label: "Dedicated Toast VLAN", source: "UniFi network", status: dedicatedVlan, detail: networks.length > 0 ? networks.map((network) => `${network.name} · VLAN ${network.vlanId ?? "none"}`).join(", ") : undefined },
     { label: "Non-Toast devices excluded from Toast VLAN", source: "UniFi clients", status: "unknown", detail: clients.length > 0 ? `${clients.length} client${clients.length === 1 ? "" : "s"} currently observed on the selected network; device purpose cannot be proven automatically.` : "No clients are currently observed on the selected network." },
@@ -320,7 +354,7 @@ function buildRequirements(zone: Zone | null, policy: PolicyResponse | null): Re
     { label: "Wireless signal remains at or above -65 dBm", source: "UniFi clients", status: signal, detail: signalDetail },
     { label: "ICMP echo replies unrestricted", source: "UniFi policy", status: icmp, detail: icmpDetail },
     { label: "Toast firewall destinations and ports allowed", source: "Firewall policy", status: firewall, detail: firewallDetail },
-    { label: "QoS provides sufficient Toast bandwidth", source: "UniFi traffic policy", status: "unknown" },
+    { label: "QoS provides sufficient Toast bandwidth", source: "UniFi traffic policy", status: qosStatus, detail: qosDetail },
     { label: "Cat5e or better cabling / T568B termination", source: "Physical verification", status: "verify" },
     { label: "Toast Ethernet ports clearly labeled", source: "Physical verification", status: "verify" },
   ]
