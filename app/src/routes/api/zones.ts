@@ -240,20 +240,18 @@ async function handleZones(request: Request) {
     const wifi = wifiPage.data ?? []
     const knownNetworkIds = new Set<string>()
 
-    const zones = firewallZones
-      .map((zone) => {
-        const zoneNetworks = networks.filter(
-          (network) => network.zoneId === zone.id || zone.networkIds?.includes(network.id),
-        )
-        for (const network of zoneNetworks) knownNetworkIds.add(network.id)
+    const zones = firewallZones.map((zone) => {
+      const zoneNetworks = networks.filter(
+        (network) => network.zoneId === zone.id || zone.networkIds?.includes(network.id),
+      )
+      for (const network of zoneNetworks) knownNetworkIds.add(network.id)
 
-        return {
-          id: zone.id,
-          name: zone.name,
-          networks: zoneNetworks.map((network) => mapNetwork(network, wifi)),
-        }
-      })
-      .filter((zone) => zone.networks.length > 0)
+      return {
+        id: zone.id,
+        name: zone.name,
+        networks: zoneNetworks.map((network) => mapNetwork(network, wifi)),
+      }
+    })
 
     const unassignedNetworks = networks.filter((network) => !knownNetworkIds.has(network.id))
     if (unassignedNetworks.length > 0) {
