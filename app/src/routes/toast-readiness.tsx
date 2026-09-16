@@ -62,6 +62,18 @@ type ZonesResponse = {
   error?: string
 }
 
+type PolicyResponse = {
+  zoneId?: string
+  unrestrictedOutbound?: boolean
+  returnTrafficAllowed?: boolean
+  icmpEchoRepliesUnrestricted?: boolean
+  toastFirewallAllowlistReachable?: boolean
+  evidence?: {
+    restrictingOutboundPolicies?: string[]
+  }
+  error?: string
+}
+
 type Requirement = {
   label: string
   source: string
@@ -73,6 +85,7 @@ function ToastReadinessPage() {
   const { data: session, isPending } = authClient.useSession()
   const { data: activeOrganization } = authClient.useActiveOrganization()
   const [data, setData] = useState<ZonesResponse>({ zones: [] })
+  const [policy, setPolicy] = useState<PolicyResponse | null>(null)
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -92,6 +105,7 @@ function ToastReadinessPage() {
     let cancelled = false
     setLoading(true)
     setData({ zones: [] })
+    setPolicy(null)
     setSelectedZoneId(null)
 
     const params = new URLSearchParams({
@@ -124,12 +138,43 @@ function ToastReadinessPage() {
     }
   }, [activeOrganization?.id, activeOrganization?.name, session])
 
+  useEffect(() => {
+    if (!session || !activeOrganization?.name || !selectedZoneId) {
+      setPolicy(null)
+      return
+    }
+
+    let cancelled = false
+    setPolicy(null)
+    const params = new URLSearchParams({
+      organizationName: activeOrganization.name,
+      zoneId: selectedZoneId,
+    })
+
+    void fetch(`/api/toast-policy?${params.toString()}`)
+      .then(async (response) => {
+        const body = (await response.json()) as PolicyResponse
+        if (cancelled) return
+        setPolicy(response.ok ? body : { error: body.error ?? `Unable to evaluate policy (${response.status})` })
+      })
+      .catch(() => {
+        if (!cancelled) setPolicy({ error: "Unable to evaluate UniFi firewall policy" })
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeOrganization?.name, selectedZoneId, session])
+
   const selectedZone = useMemo(
     () => data.zones.find((zone) => zone.id === selectedZoneId) ?? null,
     [data.zones, selectedZoneId],
   )
 
-  const requirements = useMemo(() => buildRequirements(selectedZone), [selectedZone])
+  const requirements = useMemo(
+    () => buildRequirements(selectedZone, policy),
+    [selectedZone, policy],
+  )
 
   if (isPending || !session) return null
 
@@ -175,7 +220,7 @@ function ToastReadinessPage() {
   )
 }
 
-function buildRequirements(zone: Zone | null): Requirement[] {
+function buildRequirements(zone: Zone | null, policy: PolicyResponse | null): Requirement[] {
   const networks = zone?.networks ?? []
   const broadcasts = networks.flatMap((network) => network.wifiBroadcasts ?? [])
   const enabledBroadcasts = broadcasts.filter((broadcast) => broadcast.enabled !== false)
@@ -239,6 +284,30 @@ function buildRequirements(zone: Zone | null): Requirement[] {
           .join(", ")
       : undefined
 
+  const policyReady = policy?.zoneId === zone?.id && !policy.error
+  const icmp: Status = !policyReady
+    ? "unknown"
+    : policy.icmpEchoRepliesUnrestricted === true
+      ? "pass"
+      : "fail"
+  const firewall: Status = !policyReady
+    ? "unknown"
+    : policy.toastFirewallAllowlistReachable === true
+      ? "pass"
+      : "fail"
+  const firewallDetail = !policyReady
+    ? policy?.error
+    : policy.toastFirewallAllowlistReachable
+      ? "Selected zone has unrestricted outbound Internet access; Toast's required destinations and ports are not blocked by UniFi zone policy."
+      : policy.evidence?.restrictingOutboundPolicies?.length
+        ? `Restricting outbound policies: ${policy.evidence.restrictingOutboundPolicies.join(", ")}`
+        : "UniFi policy does not prove unrestricted outbound access."
+  const icmpDetail = !policyReady
+    ? policy?.error
+    : policy.icmpEchoRepliesUnrestricted
+      ? "Outbound traffic is unrestricted and return traffic is allowed by the External → selected-zone policy."
+      : "UniFi policy does not prove unrestricted ICMP echo replies."
+
   return [
     { label: "Dedicated Toast VLAN", source: "UniFi network", status: dedicatedVlan, detail: networks.length > 0 ? networks.map((network) => `${network.name} · VLAN ${network.vlanId ?? "none"}`).join(", ") : undefined },
     { label: "Non-Toast devices excluded from Toast VLAN", source: "UniFi clients", status: "unknown", detail: clients.length > 0 ? `${clients.length} client${clients.length === 1 ? "" : "s"} currently observed on the selected network; device purpose cannot be proven automatically.` : "No clients are currently observed on the selected network." },
@@ -249,8 +318,8 @@ function buildRequirements(zone: Zone | null): Requirement[] {
     { label: "5 GHz wireless", source: "UniFi WiFi", status: fiveGhz, detail: enabledBroadcasts.map((broadcast) => `${broadcast.name}: ${broadcast.frequenciesGHz.join(" / ")} GHz`).join(", ") || undefined },
     { label: "WPA2/AES Personal encryption", source: "UniFi WiFi", status: wpa2, detail: enabledBroadcasts.map((broadcast) => `${broadcast.name}: ${formatSecurity(broadcast.securityType)}`).join(", ") || undefined },
     { label: "Wireless signal remains at or above -65 dBm", source: "UniFi clients", status: signal, detail: signalDetail },
-    { label: "ICMP echo replies unrestricted", source: "UniFi policy", status: "unknown" },
-    { label: "Toast firewall destinations and ports allowed", source: "Firewall policy", status: "unknown" },
+    { label: "ICMP echo replies unrestricted", source: "UniFi policy", status: icmp, detail: icmpDetail },
+    { label: "Toast firewall destinations and ports allowed", source: "Firewall policy", status: firewall, detail: firewallDetail },
     { label: "QoS provides sufficient Toast bandwidth", source: "UniFi traffic policy", status: "unknown" },
     { label: "Cat5e or better cabling / T568B termination", source: "Physical verification", status: "verify" },
     { label: "Toast Ethernet ports clearly labeled", source: "Physical verification", status: "verify" },
