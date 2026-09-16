@@ -24,13 +24,14 @@ type Zone = {
   }>
 }
 
-type ZonesResponse = { zones: Zone[] }
+type ZonesResponse = { zones: Zone[]; error?: string }
 
 function ZonesPage() {
   const { data: session, isPending } = authClient.useSession()
   const { data: activeOrganization } = authClient.useActiveOrganization()
   const [data, setData] = useState<ZonesResponse>({ zones: [] })
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     if (isPending || session) return
@@ -39,21 +40,45 @@ function ZonesPage() {
   }, [isPending, session])
 
   useEffect(() => {
-    if (!session || !activeOrganization?.id) return
+    if (!session || !activeOrganization?.id || !activeOrganization.name) {
+      setData({ zones: [] })
+      setSelectedZoneId(null)
+      return
+    }
+
     let cancelled = false
-    void fetch(`/api/zones?organizationId=${encodeURIComponent(activeOrganization.id)}`)
+    setLoading(true)
+    setData({ zones: [] })
+    setSelectedZoneId(null)
+
+    const params = new URLSearchParams({
+      organizationId: activeOrganization.id,
+      organizationName: activeOrganization.name,
+    })
+
+    void fetch(`/api/zones?${params.toString()}`)
       .then(async (response) => {
         const body = (await response.json()) as ZonesResponse
-        if (!cancelled && response.ok) {
+        if (cancelled) return
+
+        if (response.ok) {
           setData(body)
           setSelectedZoneId(body.zones[0]?.id ?? null)
+        } else {
+          setData({ zones: [], error: body.error ?? `Unable to load zones (${response.status})` })
         }
       })
       .catch(() => {
-        if (!cancelled) setData({ zones: [] })
+        if (!cancelled) setData({ zones: [], error: "Unable to load UniFi zones" })
       })
-    return () => { cancelled = true }
-  }, [activeOrganization?.id, session])
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeOrganization?.id, activeOrganization?.name, session])
 
   const selectedZone = useMemo(
     () => data.zones.find((zone) => zone.id === selectedZoneId) ?? null,
@@ -82,7 +107,9 @@ function ZonesPage() {
           value={selectedZoneId}
           onValueChange={setSelectedZoneId}
           placeholder="Select zone"
-          emptyLabel="No zones available"
+          emptyLabel={data.error ?? "No zones available"}
+          loadingLabel="Loading UniFi zones…"
+          loading={loading}
           icon={PanelsTopLeftIcon}
         />
 
@@ -99,7 +126,7 @@ function ZonesPage() {
                     <dt className="text-muted-foreground">VLAN ID</dt><dd>{network.vlanId ?? "—"}</dd>
                     <dt className="text-muted-foreground">Subnet</dt><dd>{network.subnet ?? "—"}</dd>
                     <dt className="text-muted-foreground">Gateway</dt><dd>{network.gateway ?? "—"}</dd>
-                    <dt className="text-muted-foreground">DNS</dt><dd>{network.dns?.join(", ") || "—"}</dd>
+                    <dt className="text-muted-foreground">DNS</dt><dd>{network.dns?.join(", ") || "Automatic"}</dd>
                     <dt className="text-muted-foreground">DHCP range</dt><dd>{network.dhcpStart && network.dhcpEnd ? `${network.dhcpStart} – ${network.dhcpEnd}` : "—"}</dd>
                   </dl>
                   <div>
@@ -110,9 +137,9 @@ function ZonesPage() {
               </Card>
             ))}
           </div>
-        ) : (
-          <Card><CardHeader><CardTitle>No zone selected</CardTitle><CardDescription>UniFi zone data will appear here once the Fabric API source is connected.</CardDescription></CardHeader></Card>
-        )}
+        ) : !loading ? (
+          <Card><CardHeader><CardTitle>No zone selected</CardTitle><CardDescription>{data.error ?? "No UniFi zones with networks were returned for this organization."}</CardDescription></CardHeader></Card>
+        ) : null}
       </div>
     </main>
   )
