@@ -1,58 +1,262 @@
+import { useEffect, useMemo, useState } from "react"
 import { createFileRoute } from "@tanstack/react-router"
-import { CheckCircle2Icon, CircleHelpIcon, ShieldCheckIcon, XCircleIcon } from "lucide-react"
+import { ResourceSelector } from "@niteowl/ui"
+import {
+  CheckCircle2Icon,
+  CircleHelpIcon,
+  ShieldCheckIcon,
+  XCircleIcon,
+} from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#/components/ui/card.tsx"
+import { authBaseURL, authClient } from "#/lib/auth-client.ts"
 
 export const Route = createFileRoute("/toast-readiness")({ component: ToastReadinessPage })
 
-const requirements = [
-  ["Dedicated Toast VLAN", "UniFi", "unknown"],
-  ["Non-Toast devices excluded from Toast VLAN", "UniFi clients", "unknown"],
-  ["Physical Ethernet ports mapped to Toast VLAN", "UniFi switching", "unknown"],
-  ["Bonjour / mDNS enabled", "UniFi", "unknown"],
-  ["Client isolation disabled", "UniFi", "unknown"],
-  ["Toast SSID mapped to Toast VLAN", "UniFi WiFi", "unknown"],
-  ["5 GHz wireless", "UniFi WiFi", "unknown"],
-  ["WPA2/AES Personal encryption", "UniFi WiFi", "unknown"],
-  ["Wireless signal remains at or above -65 dBm", "UniFi clients", "unknown"],
-  ["ICMP echo replies unrestricted", "UniFi policy", "unknown"],
-  ["Toast firewall destinations and ports allowed", "Firewall policy", "unknown"],
-  ["QoS provides sufficient Toast bandwidth", "UniFi traffic policy", "unknown"],
-  ["Cat5e or better cabling / T568B termination", "Physical verification", "verify"],
-  ["Toast Ethernet ports clearly labeled", "Physical verification", "verify"],
-] as const
+type Status = "pass" | "fail" | "verify" | "unknown"
+
+type WifiBroadcast = {
+  id: string
+  name: string
+  enabled: boolean | null
+  frequenciesGHz: number[]
+  clientIsolationEnabled: boolean | null
+  multicastToUnicastConversionEnabled: boolean | null
+  securityType: string | null
+}
+
+type Network = {
+  id: string
+  name: string
+  vlanId: number | null
+  isolationEnabled: boolean | null
+  internetAccessEnabled: boolean | null
+  mdnsForwardingEnabled: boolean | null
+  wifiBroadcasts?: WifiBroadcast[]
+}
+
+type Zone = {
+  id: string
+  name: string
+  networks: Network[]
+}
+
+type ZonesResponse = {
+  zones: Zone[]
+  error?: string
+}
+
+type Requirement = {
+  label: string
+  source: string
+  status: Status
+  detail?: string
+}
 
 function ToastReadinessPage() {
+  const { data: session, isPending } = authClient.useSession()
+  const { data: activeOrganization } = authClient.useActiveOrganization()
+  const [data, setData] = useState<ZonesResponse>({ zones: [] })
+  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (isPending || session) return
+    const redirectTo = encodeURIComponent(window.location.href)
+    window.location.replace(`${authBaseURL.replace(/\/$/, "")}/auth/sign-in?redirectTo=${redirectTo}`)
+  }, [isPending, session])
+
+  useEffect(() => {
+    if (!session || !activeOrganization?.id || !activeOrganization.name) {
+      setData({ zones: [] })
+      setSelectedZoneId(null)
+      return
+    }
+
+    let cancelled = false
+    setLoading(true)
+    setData({ zones: [] })
+    setSelectedZoneId(null)
+
+    const params = new URLSearchParams({
+      organizationId: activeOrganization.id,
+      organizationName: activeOrganization.name,
+    })
+
+    void fetch(`/api/zones?${params.toString()}`)
+      .then(async (response) => {
+        const body = (await response.json()) as ZonesResponse
+        if (cancelled) return
+
+        if (response.ok) {
+          setData(body)
+          const toastZone = body.zones.find((zone) => zone.name.toLowerCase() === "toast")
+          setSelectedZoneId(toastZone?.id ?? body.zones[0]?.id ?? null)
+        } else {
+          setData({ zones: [], error: body.error ?? `Unable to load zones (${response.status})` })
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setData({ zones: [], error: "Unable to load UniFi zones" })
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeOrganization?.id, activeOrganization?.name, session])
+
+  const selectedZone = useMemo(
+    () => data.zones.find((zone) => zone.id === selectedZoneId) ?? null,
+    [data.zones, selectedZoneId],
+  )
+
+  const requirements = useMemo(() => buildRequirements(selectedZone), [selectedZone])
+
+  if (isPending || !session) return null
+
   return (
     <main className="flex-1 p-4 md:p-6">
       <div className="w-full space-y-6">
         <div className="flex items-start gap-3">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-full border bg-card text-muted-foreground shadow-sm"><ShieldCheckIcon className="size-5" /></div>
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-full border bg-card text-muted-foreground shadow-sm">
+            <ShieldCheckIcon className="size-5" />
+          </div>
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Toast Network Readiness</h1>
-            <p className="mt-1 text-sm text-muted-foreground">Checks the selected UniFi network against Toast's self-managed network requirements.</p>
+            <p className="mt-1 text-sm text-muted-foreground">Checks the selected UniFi zone against Toast's self-managed network requirements.</p>
           </div>
         </div>
+
+        <ResourceSelector
+          title="Zone"
+          description="Select the UniFi zone used by Toast."
+          resources={data.zones}
+          value={selectedZoneId}
+          onValueChange={setSelectedZoneId}
+          placeholder="Select zone"
+          emptyLabel={data.error ?? "No zones available"}
+          loadingLabel="Loading UniFi zones…"
+          loading={loading}
+          icon={ShieldCheckIcon}
+        />
 
         <Card>
           <CardHeader>
             <CardTitle>Requirements</CardTitle>
-            <CardDescription>Checks remain unknown until the Fabric API exposes enough configuration to prove pass or fail. Physical requirements stay manual.</CardDescription>
+            <CardDescription>Pass and fail are based on configuration exposed by UniFi. Verify requires a physical or operational check. Unknown means the current API data cannot prove either result.</CardDescription>
           </CardHeader>
           <CardContent className="divide-y">
-            {requirements.map(([label, source, status]) => {
-              const Icon = status === "verify" ? CircleHelpIcon : status === "pass" ? CheckCircle2Icon : status === "fail" ? XCircleIcon : CircleHelpIcon
-              return (
-                <div key={label} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
-                  <Icon className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
-                  <div className="min-w-0 flex-1"><p className="font-medium">{label}</p><p className="text-sm text-muted-foreground">{source}</p></div>
-                  <span className="text-sm text-muted-foreground">{status === "verify" ? "Verify" : "Unknown"}</span>
-                </div>
-              )
-            })}
+            {requirements.map((requirement) => (
+              <RequirementRow key={requirement.label} requirement={requirement} />
+            ))}
           </CardContent>
         </Card>
       </div>
     </main>
+  )
+}
+
+function buildRequirements(zone: Zone | null): Requirement[] {
+  const networks = zone?.networks ?? []
+  const broadcasts = networks.flatMap((network) => network.wifiBroadcasts ?? [])
+  const enabledBroadcasts = broadcasts.filter((broadcast) => broadcast.enabled !== false)
+
+  const dedicatedVlan: Status = !zone
+    ? "unknown"
+    : networks.length === 0
+      ? "fail"
+      : networks.every((network) => network.vlanId !== null)
+        ? "pass"
+        : "fail"
+
+  const ssidMapped: Status = !zone
+    ? "unknown"
+    : networks.length === 0 || enabledBroadcasts.length === 0
+      ? "fail"
+      : "pass"
+
+  const fiveGhz: Status = enabledBroadcasts.length === 0
+    ? "unknown"
+    : enabledBroadcasts.every((broadcast) => broadcast.frequenciesGHz.includes(5))
+      ? "pass"
+      : "fail"
+
+  const wpa2: Status = enabledBroadcasts.length === 0
+    ? "unknown"
+    : enabledBroadcasts.every((broadcast) => broadcast.securityType === "WPA2_PERSONAL")
+      ? "pass"
+      : "fail"
+
+  const isolationValues = enabledBroadcasts.map((broadcast) => broadcast.clientIsolationEnabled)
+  const clientIsolation: Status = isolationValues.length === 0 || isolationValues.some((value) => value === null)
+    ? "unknown"
+    : isolationValues.every((value) => value === false)
+      ? "pass"
+      : "fail"
+
+  const mdnsValues = networks.map((network) => network.mdnsForwardingEnabled)
+  const mdns: Status = mdnsValues.length === 0 || mdnsValues.some((value) => value === null)
+    ? "unknown"
+    : mdnsValues.every((value) => value === true)
+      ? "pass"
+      : "fail"
+
+  return [
+    { label: "Dedicated Toast VLAN", source: "UniFi network", status: dedicatedVlan, detail: networks.length > 0 ? networks.map((network) => `${network.name} · VLAN ${network.vlanId ?? "none"}`).join(", ") : undefined },
+    { label: "Non-Toast devices excluded from Toast VLAN", source: "UniFi clients", status: "unknown" },
+    { label: "Physical Ethernet ports mapped to Toast VLAN", source: "UniFi switching", status: "unknown" },
+    { label: "Bonjour / mDNS enabled", source: "UniFi network", status: mdns },
+    { label: "Client isolation disabled", source: "UniFi WiFi", status: clientIsolation },
+    { label: "Toast SSID mapped to Toast VLAN", source: "UniFi WiFi", status: ssidMapped, detail: enabledBroadcasts.map((broadcast) => broadcast.name).join(", ") || undefined },
+    { label: "5 GHz wireless", source: "UniFi WiFi", status: fiveGhz, detail: enabledBroadcasts.map((broadcast) => `${broadcast.name}: ${broadcast.frequenciesGHz.join(" / ")} GHz`).join(", ") || undefined },
+    { label: "WPA2/AES Personal encryption", source: "UniFi WiFi", status: wpa2, detail: enabledBroadcasts.map((broadcast) => `${broadcast.name}: ${formatSecurity(broadcast.securityType)}`).join(", ") || undefined },
+    { label: "Wireless signal remains at or above -65 dBm", source: "UniFi clients", status: "unknown" },
+    { label: "ICMP echo replies unrestricted", source: "UniFi policy", status: "unknown" },
+    { label: "Toast firewall destinations and ports allowed", source: "Firewall policy", status: "unknown" },
+    { label: "QoS provides sufficient Toast bandwidth", source: "UniFi traffic policy", status: "unknown" },
+    { label: "Cat5e or better cabling / T568B termination", source: "Physical verification", status: "verify" },
+    { label: "Toast Ethernet ports clearly labeled", source: "Physical verification", status: "verify" },
+  ]
+}
+
+function formatSecurity(value: string | null) {
+  if (!value) return "Unknown"
+  return value.replaceAll("_", " ")
+}
+
+function RequirementRow({ requirement }: { requirement: Requirement }) {
+  const Icon = requirement.status === "pass"
+    ? CheckCircle2Icon
+    : requirement.status === "fail"
+      ? XCircleIcon
+      : CircleHelpIcon
+
+  const label = requirement.status === "pass"
+    ? "Pass"
+    : requirement.status === "fail"
+      ? "Fail"
+      : requirement.status === "verify"
+        ? "Verify"
+        : "Unknown"
+
+  const iconClassName = requirement.status === "pass"
+    ? "text-green-600 dark:text-green-500"
+    : requirement.status === "fail"
+      ? "text-destructive"
+      : "text-muted-foreground"
+
+  return (
+    <div className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+      <Icon className={`mt-0.5 size-5 shrink-0 ${iconClassName}`} />
+      <div className="min-w-0 flex-1">
+        <p className="font-medium">{requirement.label}</p>
+        <p className="text-sm text-muted-foreground">{requirement.source}</p>
+        {requirement.detail ? <p className="mt-1 text-sm text-muted-foreground">{requirement.detail}</p> : null}
+      </div>
+      <span className="text-sm text-muted-foreground">{label}</span>
+    </div>
   )
 }
