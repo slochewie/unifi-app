@@ -207,8 +207,18 @@ function buildRequirements(zone: Zone | null, policy: PolicyResponse | null): Re
   const wpa2: Status = enabledBroadcasts.length === 0 ? "unknown" : enabledBroadcasts.every((broadcast) => broadcast.securityType === "WPA2_AES_PERSONAL") ? "pass" : "fail"
   const isolationValues = enabledBroadcasts.map((broadcast) => broadcast.clientIsolationEnabled)
   const clientIsolation: Status = isolationValues.length === 0 || isolationValues.some((value) => value === null) ? "unknown" : isolationValues.every((value) => value === false) ? "pass" : "fail"
-  const mdnsValues = networks.map((network) => network.mdnsEnabled)
-  const mdns: Status = mdnsValues.length === 0 || mdnsValues.some((value) => value === null) ? "unknown" : mdnsValues.every((value) => value === true) ? "pass" : "fail"
+  const localMulticast: Status = networks.length === 0 || enabledBroadcasts.length === 0
+    ? "unknown"
+    : enabledBroadcasts.every((broadcast) => broadcast.clientIsolationEnabled === false)
+      ? "pass"
+      : enabledBroadcasts.some((broadcast) => broadcast.clientIsolationEnabled === true)
+        ? "fail"
+        : "unknown"
+  const localMulticastDetail = localMulticast === "pass"
+    ? "Toast clients share the selected VLAN/SSID and WiFi client isolation is disabled. Cross-VLAN mDNS proxying is not required for local discovery within the Toast subnet."
+    : localMulticast === "fail"
+      ? "WiFi client isolation blocks local peer discovery on at least one Toast SSID."
+      : "UniFi does not expose enough local peer/multicast state to prove this requirement."
   const signal: Status = wirelessClients.length === 0 || clientsWithSignal.length !== wirelessClients.length ? "unknown" : clientsWithSignal.every((client) => client.signalDbm >= -65) ? "pass" : "fail"
   const signalDetail = wirelessClients.length === 0
     ? "No wireless clients are currently connected to the selected network."
@@ -251,7 +261,7 @@ function buildRequirements(zone: Zone | null, policy: PolicyResponse | null): Re
     { label: "Dedicated Toast VLAN", source: "UniFi network", status: dedicatedVlan, detail: networks.length > 0 ? networks.map((network) => `${network.name} · VLAN ${network.vlanId ?? "none"}`).join(", ") : undefined },
     { label: "Non-Toast devices excluded from Toast VLAN", source: "UniFi clients", status: "unknown", detail: clients.length > 0 ? `${clients.length} client${clients.length === 1 ? "" : "s"} currently observed on the selected network; device purpose cannot be proven automatically.` : "No clients are currently observed on the selected network." },
     { label: "Physical Ethernet ports mapped to Toast VLAN", source: "UniFi switching", status: "unknown", detail: "Explicit port overrides are not a complete effective-port configuration; inherited port settings are not treated as pass or fail." },
-    { label: "Bonjour / mDNS enabled", source: "UniFi network", status: mdns },
+    { label: "Local multicast / Bonjour permitted", source: "UniFi network and WiFi", status: localMulticast, detail: localMulticastDetail },
     { label: "Client isolation disabled", source: "UniFi WiFi", status: clientIsolation },
     { label: "Toast SSID mapped to Toast VLAN", source: "UniFi WiFi", status: ssidMapped, detail: enabledBroadcasts.map((broadcast) => broadcast.name).join(", ") || undefined },
     { label: "5 GHz wireless", source: "UniFi WiFi", status: fiveGhz, detail: enabledBroadcasts.map((broadcast) => `${broadcast.name}: ${broadcast.frequenciesGHz.join(" / ")} GHz`).join(", ") || undefined },
@@ -280,10 +290,9 @@ function RequirementRow({ requirement }: { requirement: Requirement }) {
       <Icon className={`mt-0.5 size-5 shrink-0 ${iconClassName}`} />
       <div className="min-w-0 flex-1">
         <p className="font-medium">{requirement.label}</p>
-        <p className="text-sm text-muted-foreground">{requirement.source}</p>
-        {requirement.detail ? <p className="mt-1 text-sm text-muted-foreground">{requirement.detail}</p> : null}
+        <p className="text-sm text-muted-foreground">{requirement.source}{requirement.detail ? ` · ${requirement.detail}` : ""}</p>
       </div>
-      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className="shrink-0 text-sm font-medium text-muted-foreground">{label}</span>
     </div>
   )
 }
