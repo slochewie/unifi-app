@@ -150,9 +150,18 @@ async function resolveNetworkHost(
 function mapNetwork(network: Network, wifi: WifiBroadcast[]) {
   const ipv4 = network.ipv4Configuration
   const dhcp = ipv4?.dhcpConfiguration
-  const ssids = wifi
+  const wifiBroadcasts = wifi
     .filter((broadcast) => broadcast.network?.networkId === network.id)
-    .map((broadcast) => broadcast.name)
+    .map((broadcast) => ({
+      id: broadcast.id,
+      name: broadcast.name,
+      enabled: broadcast.enabled ?? null,
+      frequenciesGHz: broadcast.broadcastingFrequenciesGHz ?? [],
+      clientIsolationEnabled: broadcast.clientIsolationEnabled ?? null,
+      multicastToUnicastConversionEnabled:
+        broadcast.multicastToUnicastConversionEnabled ?? null,
+      securityType: broadcast.securityConfiguration?.type ?? null,
+    }))
 
   return {
     id: network.id,
@@ -172,7 +181,8 @@ function mapNetwork(network: Network, wifi: WifiBroadcast[]) {
     isolationEnabled: network.isolationEnabled ?? null,
     internetAccessEnabled: network.internetAccessEnabled ?? null,
     mdnsForwardingEnabled: network.mdnsForwardingEnabled ?? null,
-    ssids,
+    ssids: wifiBroadcasts.map((broadcast) => broadcast.name),
+    wifiBroadcasts,
   }
 }
 
