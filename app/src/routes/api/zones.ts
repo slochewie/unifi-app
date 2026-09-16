@@ -59,6 +59,50 @@ type WifiBroadcast = {
   }
 }
 
+type LegacyNetwork = {
+  _id?: string
+  external_id?: string
+  mdns_enabled?: boolean
+  network_isolation_enabled?: boolean
+  internet_access_enabled?: boolean
+}
+
+type LegacyWlan = {
+  _id?: string
+  external_id?: string
+  name?: string
+  enabled?: boolean
+  networkconf_id?: string
+  wlan_bands?: string[]
+  wlan_band?: string
+  l2_isolation?: boolean
+  mcastenhance_enabled?: boolean
+  wpa_mode?: string
+  wpa_enc?: string
+}
+
+type LegacyClient = {
+  mac?: string
+  hostname?: string
+  name?: string
+  ip?: string
+  last_ip?: string
+  is_wired?: boolean
+  network_id?: string
+  last_connection_network_id?: string
+  essid?: string
+  signal?: number
+  ap_mac?: string
+  sw_mac?: string
+  sw_port?: number
+  last_uplink_name?: string
+  qos_policy_applied?: boolean
+}
+
+type LegacyResponse<T> = {
+  data?: T[]
+}
+
 type Page<T> = {
   data?: T[]
 }
@@ -66,6 +110,12 @@ type Page<T> = {
 type SiteConfig = {
   siteId: string
   names: string[]
+}
+
+type LegacyData = {
+  networks: LegacyNetwork[]
+  wlans: LegacyWlan[]
+  clients: LegacyClient[]
 }
 
 const SITE_CONFIG: SiteConfig[] = [
@@ -117,8 +167,12 @@ async function unifiFetch<T>(url: string, apiKey: string) {
   return (await response.json()) as T
 }
 
+function connectorNetworkBase(hostId: string) {
+  return `https://api.ui.com/v1/connector/consoles/${encodeURIComponent(hostId)}/proxy/network`
+}
+
 function connectorBase(hostId: string) {
-  return `https://api.ui.com/v1/connector/consoles/${encodeURIComponent(hostId)}/proxy/network/integration/v1`
+  return `${connectorNetworkBase(hostId)}/integration/v1`
 }
 
 async function resolveNetworkHost(
@@ -147,21 +201,114 @@ async function resolveNetworkHost(
   return null
 }
 
-function mapNetwork(network: Network, wifi: WifiBroadcast[]) {
+async function loadLegacyData(hostId: string, localSite: LocalSite, apiKey: string) {
+  const siteReference = localSite.internalReference || "default"
+  const base = `${connectorNetworkBase(hostId)}/api/s/${encodeURIComponent(siteReference)}`
+
+  try {
+    const [networkResponse, wlanResponse, clientResponse] = await Promise.all([
+      unifiFetch<LegacyResponse<LegacyNetwork>>(`${base}/rest/networkconf`, apiKey),
+      unifiFetch<LegacyResponse<LegacyWlan>>(`${base}/rest/wlanconf`, apiKey),
+      unifiFetch<LegacyResponse<LegacyClient>>(`${base}/stat/sta`, apiKey),
+    ])
+
+    return {
+      networks: networkResponse.data ?? [],
+      wlans: wlanResponse.data ?? [],
+      clients: clientResponse.data ?? [],
+    } satisfies LegacyData
+  } catch (error) {
+    console.warn("Unable to load enriched UniFi controller data", error)
+    return { networks: [], wlans: [], clients: [] } satisfies LegacyData
+  }
+}
+
+function legacyBands(wlan: LegacyWlan) {
+  if (wlan.wlan_bands?.length) {
+    return wlan.wlan_bands.flatMap((band) => band === "2g" ? [2.4] : band === "5g" ? [5] : band === "6g" ? [6] : [])
+  }
+
+  if (wlan.wlan_band === "both") return [2.4, 5]
+  if (wlan.wlan_band === "2g") return [2.4]
+  if (wlan.wlan_band === "5g") return [5]
+  if (wlan.wlan_band === "6g") return [6]
+  return []
+}
+
+function legacySecurityType(wlan: LegacyWlan) {
+  if (wlan.wpa_mode === "wpa2" && wlan.wpa_enc === "ccmp") return "WPA2_AES_PERSONAL"
+  if (wlan.wpa_mode === "wpa2") return "WPA2_PERSONAL"
+  return wlan.wpa_mode?.toUpperCase() ?? null
+}
+
+function mapNetwork(network: Network, wifi: WifiBroadcast[], legacy: LegacyData) {
   const ipv4 = network.ipv4Configuration
   const dhcp = ipv4?.dhcpConfiguration
-  const wifiBroadcasts = wifi
-    .filter((broadcast) => broadcast.network?.networkId === network.id)
-    .map((broadcast) => ({
+  const legacyNetwork = legacy.networks.find((candidate) => candidate.external_id === network.id)
+  const legacyNetworkId = legacyNetwork?._id
+  const legacyWlans = legacyNetworkId
+    ? legacy.wlans.filter((wlan) => wlan.networkconf_id === legacyNetworkId)
+    : []
+  const integrationWifi = wifi.filter((broadcast) => broadcast.network?.networkId === network.id)
+  const legacyWlanByExternalId = new Map(
+    legacyWlans.filter((wlan) => wlan.external_id).map((wlan) => [wlan.external_id, wlan]),
+  )
+  const integrationIds = new Set(integrationWifi.map((broadcast) => broadcast.id))
+
+  const wifiBroadcasts = integrationWifi.map((broadcast) => {
+    const legacyWlan = legacyWlanByExternalId.get(broadcast.id)
+    return {
       id: broadcast.id,
       name: broadcast.name,
-      enabled: broadcast.enabled ?? null,
-      frequenciesGHz: broadcast.broadcastingFrequenciesGHz ?? [],
-      clientIsolationEnabled: broadcast.clientIsolationEnabled ?? null,
+      enabled: broadcast.enabled ?? legacyWlan?.enabled ?? null,
+      frequenciesGHz:
+        legacyWlan && legacyBands(legacyWlan).length > 0
+          ? legacyBands(legacyWlan)
+          : broadcast.broadcastingFrequenciesGHz ?? [],
+      clientIsolationEnabled:
+        legacyWlan?.l2_isolation ?? broadcast.clientIsolationEnabled ?? null,
       multicastToUnicastConversionEnabled:
-        broadcast.multicastToUnicastConversionEnabled ?? null,
-      securityType: broadcast.securityConfiguration?.type ?? null,
-    }))
+        legacyWlan?.mcastenhance_enabled ??
+        broadcast.multicastToUnicastConversionEnabled ??
+        null,
+      securityType:
+        legacyWlan ? legacySecurityType(legacyWlan) : broadcast.securityConfiguration?.type ?? null,
+    }
+  })
+
+  for (const wlan of legacyWlans) {
+    if (wlan.external_id && integrationIds.has(wlan.external_id)) continue
+    if (!wlan._id || !wlan.name) continue
+    wifiBroadcasts.push({
+      id: wlan.external_id ?? wlan._id,
+      name: wlan.name,
+      enabled: wlan.enabled ?? null,
+      frequenciesGHz: legacyBands(wlan),
+      clientIsolationEnabled: wlan.l2_isolation ?? null,
+      multicastToUnicastConversionEnabled: wlan.mcastenhance_enabled ?? null,
+      securityType: legacySecurityType(wlan),
+    })
+  }
+
+  const clients = legacyNetworkId
+    ? legacy.clients
+        .filter((client) =>
+          client.network_id === legacyNetworkId || client.last_connection_network_id === legacyNetworkId,
+        )
+        .map((client) => ({
+          mac: client.mac ?? null,
+          name: client.hostname ?? client.name ?? null,
+          ipAddress: client.ip ?? client.last_ip ?? null,
+          wired: client.is_wired ?? null,
+          ssid: client.essid ?? null,
+          signalDbm: client.signal ?? null,
+          accessPointMac: client.ap_mac ?? null,
+          switchMac: client.sw_mac ?? null,
+          switchPort: client.sw_port ?? null,
+          uplinkName: client.last_uplink_name ?? null,
+          qosPolicyApplied: client.qos_policy_applied ?? null,
+        }))
+    : []
 
   return {
     id: network.id,
@@ -178,11 +325,14 @@ function mapNetwork(network: Network, wifi: WifiBroadcast[]) {
     dhcpMode: dhcp?.mode ?? null,
     dhcpLeaseSeconds: dhcp?.leaseTimeSeconds ?? null,
     management: network.management ?? null,
-    isolationEnabled: network.isolationEnabled ?? null,
-    internetAccessEnabled: network.internetAccessEnabled ?? null,
+    isolationEnabled: legacyNetwork?.network_isolation_enabled ?? network.isolationEnabled ?? null,
+    internetAccessEnabled:
+      legacyNetwork?.internet_access_enabled ?? network.internetAccessEnabled ?? null,
+    mdnsEnabled: legacyNetwork?.mdns_enabled ?? null,
     mdnsForwardingEnabled: network.mdnsForwardingEnabled ?? null,
     ssids: wifiBroadcasts.map((broadcast) => broadcast.name),
     wifiBroadcasts,
+    clients,
   }
 }
 
@@ -231,10 +381,11 @@ async function handleZones(request: Request) {
     const { cloudSite, localSite } = resolved
     const base = connectorBase(cloudSite.hostId)
     const sitePath = `${base}/sites/${encodeURIComponent(localSite.id)}`
-    const [networkPage, zonePage, wifiPage] = await Promise.all([
+    const [networkPage, zonePage, wifiPage, legacy] = await Promise.all([
       unifiFetch<Page<Network>>(`${sitePath}/networks?offset=0&limit=200`, apiKey),
       unifiFetch<Page<FirewallZone>>(`${sitePath}/firewall/zones?offset=0&limit=200`, apiKey),
       unifiFetch<Page<WifiBroadcast>>(`${sitePath}/wifi/broadcasts?offset=0&limit=200`, apiKey),
+      loadLegacyData(cloudSite.hostId, localSite, apiKey),
     ])
 
     const networkSummaries = networkPage.data ?? []
@@ -259,7 +410,7 @@ async function handleZones(request: Request) {
       return {
         id: zone.id,
         name: zone.name,
-        networks: zoneNetworks.map((network) => mapNetwork(network, wifi)),
+        networks: zoneNetworks.map((network) => mapNetwork(network, wifi, legacy)),
       }
     })
 
@@ -268,7 +419,7 @@ async function handleZones(request: Request) {
       zones.push({
         id: "unassigned",
         name: "Unassigned",
-        networks: unassignedNetworks.map((network) => mapNetwork(network, wifi)),
+        networks: unassignedNetworks.map((network) => mapNetwork(network, wifi, legacy)),
       })
     }
 
