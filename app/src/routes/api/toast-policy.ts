@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises"
 import { createFileRoute } from "@tanstack/react-router"
 
 type SiteManagerSite = { siteId?: string; hostId?: string }
-type LocalSite = { id: string; name: string }
+type LocalSite = { id: string; name: string; internalReference?: string }
 type Page<T> = { data?: T[] }
 type SiteConfig = { siteId: string; names: string[] }
 
@@ -14,6 +14,7 @@ type FirewallZone = {
 
 type Network = {
   id: string
+  zoneId?: string
   ipv4Configuration?: {
     hostIpAddress?: string
     prefixLength?: number
@@ -52,6 +53,33 @@ type FirewallPolicy = {
   ipProtocolScope?: {
     ipVersion?: string
     protocolFilter?: unknown
+  }
+}
+
+type LegacyNetwork = {
+  name?: string
+  purpose?: string
+  wan_networkgroup?: string
+  wan_load_balance_type?: string
+  wan_failover_priority?: number
+  wan_smartq_enabled?: boolean
+  wan_provider_capabilities?: {
+    upload_kilobits_per_second?: number
+    download_kilobits_per_second?: number
+  }
+}
+
+type TrafficRule = {
+  _id?: string
+  id?: string
+  enabled?: boolean
+  description?: string
+  name?: string
+  network_ids?: string[]
+  matching_target?: string
+  bandwidth_limit?: {
+    download_limit_kbps?: number
+    upload_limit_kbps?: number
   }
 }
 
@@ -100,8 +128,12 @@ async function unifiFetch<T>(url: string, apiKey: string) {
   return (await response.json()) as T
 }
 
+function connectorRoot(hostId: string) {
+  return `https://api.ui.com/v1/connector/consoles/${encodeURIComponent(hostId)}/proxy/network`
+}
+
 function connectorBase(hostId: string) {
-  return `https://api.ui.com/v1/connector/consoles/${encodeURIComponent(hostId)}/proxy/network/integration/v1`
+  return `${connectorRoot(hostId)}/integration/v1`
 }
 
 async function resolveNetworkHost(
@@ -159,6 +191,17 @@ function isInvalidTrafficPolicy(policy: FirewallPolicy) {
   return policy.name.toLowerCase() === "block invalid traffic"
 }
 
+function isPrimaryWan(network: LegacyNetwork) {
+  if (network.purpose !== "wan") return false
+  if (network.wan_load_balance_type === "failover-only") return false
+  return network.wan_networkgroup === "WAN" || network.wan_failover_priority === 1
+}
+
+function ruleTargetsSelectedNetwork(rule: TrafficRule, networkIds: Set<string>) {
+  if (rule.enabled === false) return false
+  return rule.network_ids?.some((networkId) => networkIds.has(networkId)) ?? false
+}
+
 async function handleToastPolicy(request: Request) {
   const url = new URL(request.url)
   const organizationName = url.searchParams.get("organizationName")
@@ -209,6 +252,10 @@ async function handleToastPolicy(request: Request) {
     }
 
     const networkIds = new Set(selectedZone.networkIds ?? [])
+    for (const network of networkPage.data ?? []) {
+      if (network.zoneId === selectedZone.id) networkIds.add(network.id)
+    }
+
     const networkSummaries = (networkPage.data ?? []).filter((network) => networkIds.has(network.id))
     const networkDetails = await Promise.all(
       networkSummaries.map((network) =>
@@ -257,6 +304,25 @@ async function handleToastPolicy(request: Request) {
     const unrestrictedOutbound = outboundAllowAll && restrictingOutboundPolicies.length === 0
     const icmpEchoRepliesUnrestricted = unrestrictedOutbound && returnTrafficAllowed
 
+    const localSite = encodeURIComponent(resolved.localSite.internalReference || "default")
+    const localBase = connectorRoot(resolved.hostId)
+    const [legacyNetworks, trafficRules] = await Promise.all([
+      unifiFetch<Page<LegacyNetwork>>(`${localBase}/api/s/${localSite}/rest/networkconf`, apiKey),
+      unifiFetch<Page<TrafficRule>>(`${localBase}/v2/api/site/${localSite}/trafficrules`, apiKey),
+    ])
+
+    const primaryWan = (legacyNetworks.data ?? []).find(isPrimaryWan) ?? null
+    const activeTrafficRules = (trafficRules.data ?? []).filter((rule) => rule.enabled !== false)
+    const toastTrafficRules = activeTrafficRules.filter((rule) => ruleTargetsSelectedNetwork(rule, networkIds))
+    const qosConfiguredForToast = toastTrafficRules.length > 0
+    const wanCapabilities = primaryWan?.wan_provider_capabilities
+    const wanDownloadMbps = wanCapabilities?.download_kilobits_per_second !== undefined
+      ? wanCapabilities.download_kilobits_per_second / 1000
+      : null
+    const wanUploadMbps = wanCapabilities?.upload_kilobits_per_second !== undefined
+      ? wanCapabilities.upload_kilobits_per_second / 1000
+      : null
+
     return Response.json({
       zoneId: selectedZone.id,
       zoneName: selectedZone.name,
@@ -265,6 +331,16 @@ async function handleToastPolicy(request: Request) {
       returnTrafficAllowed,
       icmpEchoRepliesUnrestricted,
       toastFirewallAllowlistReachable: unrestrictedOutbound,
+      qos: {
+        configuredForToast: qosConfiguredForToast,
+        activeTrafficRuleCount: activeTrafficRules.length,
+        toastTrafficRuleCount: toastTrafficRules.length,
+        smartQueuesEnabled: primaryWan?.wan_smartq_enabled ?? null,
+        wanDownloadMbps,
+        wanUploadMbps,
+        recommendedDownloadMbps: 15,
+        recommendedUploadMbps: 5,
+      },
       evidence: {
         outboundPolicies: outboundPolicies.map((policy) => ({
           name: policy.name,
@@ -278,10 +354,15 @@ async function handleToastPolicy(request: Request) {
           allowReturnTraffic: policy.action?.allowReturnTraffic ?? false,
         })),
         restrictingOutboundPolicies: restrictingOutboundPolicies.map((policy) => policy.name),
+        toastTrafficRules: toastTrafficRules.map((rule) => ({
+          id: rule._id ?? rule.id ?? null,
+          name: rule.description ?? rule.name ?? "Traffic rule",
+          bandwidthLimit: rule.bandwidth_limit ?? null,
+        })),
       },
     })
   } catch (error) {
-    console.error("Failed to evaluate Toast firewall policy", error)
+    console.error("Failed to evaluate Toast firewall and QoS policy", error)
     return Response.json(
       { error: error instanceof Error ? error.message : "Unable to reach UniFi Network API" },
       { status: 502 },
