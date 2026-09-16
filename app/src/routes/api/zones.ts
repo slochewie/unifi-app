@@ -117,6 +117,36 @@ async function unifiFetch<T>(url: string, apiKey: string) {
   return (await response.json()) as T
 }
 
+function connectorBase(hostId: string) {
+  return `https://api.ui.com/v1/connector/consoles/${encodeURIComponent(hostId)}/proxy/network/integration/v1`
+}
+
+async function resolveNetworkHost(
+  sites: SiteManagerSite[],
+  siteConfig: SiteConfig,
+  apiKey: string,
+) {
+  const candidates = sites.filter(
+    (site): site is SiteManagerSite & { hostId: string } =>
+      site.siteId === siteConfig.siteId && Boolean(site.hostId),
+  )
+
+  for (const candidate of candidates) {
+    try {
+      const localSites = await unifiFetch<Page<LocalSite>>(
+        `${connectorBase(candidate.hostId)}/sites?offset=0&limit=100`,
+        apiKey,
+      )
+      const localSite = localSites.data?.[0]
+      if (localSite) return { cloudSite: candidate, localSite }
+    } catch (error) {
+      console.warn("Skipping unavailable UniFi console", candidate.hostId, error)
+    }
+  }
+
+  return null
+}
+
 function mapNetwork(network: Network, wifi: WifiBroadcast[]) {
   const ipv4 = network.ipv4Configuration
   const dhcp = ipv4?.dhcpConfiguration
@@ -179,26 +209,17 @@ async function handleZones(request: Request) {
       "https://api.ui.com/v1/sites?pageSize=100",
       apiKey,
     )
-    const cloudSite = cloudSites.data?.find((site) => site.siteId === siteConfig.siteId)
+    const resolved = await resolveNetworkHost(cloudSites.data ?? [], siteConfig, apiKey)
 
-    if (!cloudSite?.hostId) {
+    if (!resolved) {
       return Response.json(
-        { error: `UniFi host was not found for ${organizationName}` },
+        { error: `No online UniFi Network console was found for ${organizationName}` },
         { status: 502 },
       )
     }
 
-    const base = `https://api.ui.com/v1/connector/consoles/${encodeURIComponent(cloudSite.hostId)}/proxy/network/integration/v1`
-    const localSites = await unifiFetch<Page<LocalSite>>(`${base}/sites?offset=0&limit=100`, apiKey)
-    const localSite = localSites.data?.[0]
-
-    if (!localSite) {
-      return Response.json(
-        { error: `UniFi Network site was not found for ${organizationName}` },
-        { status: 502 },
-      )
-    }
-
+    const { cloudSite, localSite } = resolved
+    const base = connectorBase(cloudSite.hostId)
     const sitePath = `${base}/sites/${encodeURIComponent(localSite.id)}`
     const [networkPage, zonePage, wifiPage] = await Promise.all([
       unifiFetch<Page<Network>>(`${sitePath}/networks?offset=0&limit=200`, apiKey),
