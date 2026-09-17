@@ -31,6 +31,7 @@ type Device = {
   macAddress: string | null
   firmwareVersion: string | null
   firmwareStatus: "update-available" | "up-to-date" | "unknown"
+  firmwareAvailableVersion?: string | null
   state: number | null
   online: boolean
   adopted: boolean | null
@@ -66,10 +67,22 @@ function DetailRow({ label, value }: { label: string; value: string | null }) {
   return <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-3 text-sm"><span className="text-muted-foreground">{label}</span><span className="min-w-0 break-all font-medium">{value || "—"}</span></div>
 }
 
-function FirmwareBadge({ status }: { status: Device["firmwareStatus"] }) {
-  if (status === "update-available") return <Badge variant="outline"><RefreshCwIcon />Firmware update available</Badge>
+function FirmwareBadge({ status, availableVersion }: { status: Device["firmwareStatus"]; availableVersion?: string | null }) {
+  if (status === "update-available") return <Badge variant="outline"><RefreshCwIcon />{availableVersion ? `Firmware ${availableVersion} available` : "Firmware update available"}</Badge>
   if (status === "up-to-date") return <Badge variant="outline"><CircleCheckIcon />Firmware up to date</Badge>
   return <Badge variant="outline"><CircleHelpIcon />Firmware status unknown</Badge>
+}
+
+function FirmwareRow({ device }: { device: Device }) {
+  return (
+    <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-3 text-sm">
+      <span className="text-muted-foreground">Firmware</span>
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <span className="font-medium">{device.firmwareVersion || "—"}</span>
+        <FirmwareBadge status={device.firmwareStatus} availableVersion={device.firmwareAvailableVersion} />
+      </div>
+    </div>
+  )
 }
 
 function DeviceCard({ device }: { device: Device }) {
@@ -89,9 +102,8 @@ function DeviceCard({ device }: { device: Device }) {
       <CardContent className="space-y-3">
         <DetailRow label="IP address" value={device.ipAddress} />
         <DetailRow label="MAC" value={device.macAddress} />
-        <DetailRow label="Firmware" value={device.firmwareVersion} />
+        <FirmwareRow device={device} />
         {device.uplink ? <DetailRow label="Uplink" value={`${device.uplink.name}${device.uplink.port ? ` · Port ${device.uplink.port}` : ""}`} /> : null}
-        <div className="pt-1"><FirmwareBadge status={device.firmwareStatus} /></div>
       </CardContent>
     </Card>
   )
