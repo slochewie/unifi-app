@@ -24,7 +24,7 @@ type Device = {
   id: string
   name: string
   model: string
-  category: "gateway" | "access-point" | "switch" | "other"
+  category: "gateway" | "access-point" | "switch" | "console" | "other"
   ipAddress: string | null
   macAddress: string | null
   firmwareVersion: string | null
@@ -33,6 +33,8 @@ type Device = {
   online: boolean
   adopted: boolean | null
   uplink: { name: string; macAddress: string | null; port: number | null } | null
+  imageId?: string | null
+  topologyImageId?: string | null
 }
 
 type DeviceSite = {
