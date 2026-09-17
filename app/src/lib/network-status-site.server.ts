@@ -4,33 +4,41 @@ export type NetworkStatusSite = {
   siteId: string
   name: string
   aliases: string[]
+  fabricId: string
 }
+
+const PRIMARY_FABRIC_ID = "niteowl-locations"
 
 const NETWORK_STATUS_SITES: NetworkStatusSite[] = [
   {
     siteId: "60b95da3e03dd800f8e1ab9a",
     name: "McCarthy's",
     aliases: ["McCarthy's", "McCarthy's Irish Pub"],
+    fabricId: PRIMARY_FABRIC_ID,
   },
   {
     siteId: "6550b431b117fd5af385cd74",
     name: "Frog",
     aliases: ["Frog", "Frog and Peach", "Frog & Peach"],
+    fabricId: PRIMARY_FABRIC_ID,
   },
   {
     siteId: "66dee07febec17067adefdd1",
     name: "Bull's",
     aliases: ["Bull's", "Bull's Tavern"],
+    fabricId: PRIMARY_FABRIC_ID,
   },
   {
     siteId: "66dc10313c42855ad7837628",
     name: "Library",
     aliases: ["Library", "The Library"],
+    fabricId: PRIMARY_FABRIC_ID,
   },
   {
     siteId: "65e19814c653b505cd7183f3",
     name: "Milestone",
-    aliases: ["Milestone"],
+    aliases: ["Milestone", "Milestone Tavern"],
+    fabricId: PRIMARY_FABRIC_ID,
   },
 ]
 
@@ -45,7 +53,11 @@ export function getNetworkStatusSiteByOrganizationName(organizationName: string)
   ) ?? null
 }
 
-export async function authorizeNetworkStatusSite(request: Request) {
+export function getNetworkStatusFabricSites(site: NetworkStatusSite) {
+  return NETWORK_STATUS_SITES.filter((candidate) => candidate.fabricId === site.fabricId)
+}
+
+async function authorizeOriginOrganization(request: Request) {
   const organizationId = new URL(request.url).searchParams.get("organizationId")
 
   if (!organizationId) {
@@ -95,5 +107,32 @@ export async function authorizeNetworkStatusSite(request: Request) {
     organizationId,
     organizationName: access.organizationName,
     site,
+    access,
+  } as const
+}
+
+export async function authorizeNetworkStatusSite(request: Request) {
+  const authorization = await authorizeOriginOrganization(request)
+  if ("response" in authorization) return authorization
+
+  return {
+    organizationId: authorization.organizationId,
+    organizationName: authorization.organizationName,
+    site: authorization.site,
+  } as const
+}
+
+export async function authorizeNetworkStatusOverview(request: Request) {
+  const authorization = await authorizeOriginOrganization(request)
+  if ("response" in authorization) return authorization
+
+  return {
+    organizationId: authorization.organizationId,
+    organizationName: authorization.organizationName,
+    site: authorization.site,
+    sites: authorization.access.fabricOverviewEnabled
+      ? getNetworkStatusFabricSites(authorization.site)
+      : [authorization.site],
+    fabricOverviewEnabled: authorization.access.fabricOverviewEnabled,
   } as const
 }
