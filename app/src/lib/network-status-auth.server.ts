@@ -1,6 +1,7 @@
 type NetworkStatusAccessResponse = {
   allowed?: boolean
   organizationName?: string | null
+  fabricOverviewEnabled?: boolean
 }
 
 type JwtHeader = {
@@ -256,5 +257,6 @@ export async function getNetworkStatusOrganizationAccess(
     allowed: result.allowed === true,
     organizationName:
       typeof result.organizationName === "string" ? result.organizationName : null,
+    fabricOverviewEnabled: result.fabricOverviewEnabled === true,
   }
 }
