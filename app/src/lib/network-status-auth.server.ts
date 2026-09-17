@@ -1,5 +1,6 @@
 type NetworkStatusAccessResponse = {
   allowed?: boolean
+  organizationName?: string | null
 }
 
 type JwtHeader = {
@@ -251,5 +252,9 @@ export async function getNetworkStatusOrganizationAccess(
   if (!response.ok) return null
 
   const result = (await response.json()) as NetworkStatusAccessResponse
-  return { allowed: result.allowed === true }
+  return {
+    allowed: result.allowed === true,
+    organizationName:
+      typeof result.organizationName === "string" ? result.organizationName : null,
+  }
 }
