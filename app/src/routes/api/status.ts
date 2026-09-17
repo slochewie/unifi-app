@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises"
 import { createFileRoute } from "@tanstack/react-router"
 
-import { authorizeNetworkStatusSite } from "#/lib/network-status-site.server.ts"
+import { authorizeNetworkStatusOverview } from "#/lib/network-status-site.server.ts"
 
 type UnifiSite = {
   siteId?: string
@@ -81,11 +81,16 @@ function mapSite(config: SiteConfig, site: UnifiSite | undefined) {
 }
 
 async function handleStatus(request: Request) {
-  const authorization = await authorizeNetworkStatusSite(request)
+  const authorization = await authorizeNetworkStatusOverview(request)
   if ("response" in authorization) return authorization.response
 
-  const config = SITE_CONFIG.find((candidate) => candidate.siteId === authorization.site.siteId)
-  if (!config) return Response.json({ error: "UniFi site configuration is unavailable" }, { status: 404 })
+  const configs = authorization.sites
+    .map((site) => SITE_CONFIG.find((candidate) => candidate.siteId === site.siteId))
+    .filter((config): config is SiteConfig => Boolean(config))
+
+  if (configs.length !== authorization.sites.length) {
+    return Response.json({ error: "UniFi site configuration is unavailable" }, { status: 404 })
+  }
 
   const apiKey = await getApiKey()
   if (!apiKey) return Response.json({ error: "UNIFI_API_KEY or UNIFI_API_KEY_FILE is not configured" }, { status: 503 })
@@ -101,8 +106,13 @@ async function handleStatus(request: Request) {
     }
     const payload = (await response.json()) as { data?: UnifiSite[] }
     const upstreamSites = Array.isArray(payload.data) ? payload.data : []
-    const site = mapSite(config, upstreamSites.find((candidate) => candidate.siteId === config.siteId))
-    return Response.json({ updatedAt: new Date().toISOString(), sites: [site] })
+    const sites = configs.map((config) =>
+      mapSite(
+        config,
+        upstreamSites.find((candidate) => candidate.siteId === config.siteId),
+      ),
+    )
+    return Response.json({ updatedAt: new Date().toISOString(), sites })
   } catch (error) {
     console.error("Failed to load UniFi status", error)
     return Response.json({ error: "Unable to reach UniFi Site Manager API" }, { status: 502 })
