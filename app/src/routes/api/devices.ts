@@ -13,6 +13,7 @@ type LegacyDevice = {
   model?: string
   type?: string
   ip?: string
+  lan_ip?: string
   version?: string
   displayable_version?: string
   state?: number
@@ -89,15 +90,22 @@ function deviceCategory(type?: string) {
 }
 
 function mapDevice(device: LegacyDevice) {
+  const category = deviceCategory(device.type)
+
   return {
     id: device._id ?? device.mac ?? `${device.model ?? "device"}-${device.ip ?? "unknown"}`,
     name: device.name?.trim() || MODEL_NAMES[device.model ?? ""] || device.model || "UniFi Device",
     model: MODEL_NAMES[device.model ?? ""] ?? device.model ?? "Unknown model",
-    category: deviceCategory(device.type),
-    ipAddress: device.ip ?? null,
+    category,
+    ipAddress: category === "gateway" ? device.lan_ip ?? device.ip ?? null : device.ip ?? device.lan_ip ?? null,
     macAddress: device.mac ?? null,
     firmwareVersion: device.displayable_version ?? device.version ?? null,
-    firmwareUpdateAvailable: device.upgradable === true,
+    firmwareStatus:
+      device.upgradable === true
+        ? "update-available"
+        : device.upgradable === false
+          ? "up-to-date"
+          : "unknown",
     state: device.state ?? null,
     online: device.state === 1,
     adopted: device.adopted ?? null,
