@@ -1,9 +1,30 @@
 import { readFile } from "node:fs/promises"
 import { createFileRoute } from "@tanstack/react-router"
 
+type UidbInfo = {
+  guid?: string
+  images?: {
+    default?: string
+    nopadding?: string
+    topology?: string
+  }
+}
+
 type SiteManagerSite = {
   siteId?: string
   hostId?: string
+}
+
+type SiteManagerDevice = {
+  mac?: string
+  model?: string
+  productLine?: string
+  uidb?: UidbInfo
+}
+
+type SiteManagerDeviceGroup = {
+  hostId?: string
+  devices?: SiteManagerDevice[]
 }
 
 type LegacyDevice = {
@@ -12,6 +33,7 @@ type LegacyDevice = {
   name?: string
   model?: string
   type?: string
+  sysid?: number
   ip?: string
   lan_ip?: string
   version?: string
@@ -45,13 +67,7 @@ type HostResponse = {
         firmwareVersion?: string
         mac?: string
       }
-      uidb?: {
-        images?: {
-          default?: string
-          nopadding?: string
-          topology?: string
-        }
-      }
+      uidb?: UidbInfo
     }
   }
 }
@@ -126,15 +142,26 @@ function connectorNetworkBase(hostId: string) {
   return `https://api.ui.com/v1/connector/consoles/${encodeURIComponent(hostId)}/proxy/network`
 }
 
-function deviceCategory(type?: string) {
+function uidbImageUrl(uidb?: UidbInfo) {
+  const guid = uidb?.guid
+  const image = uidb?.images?.nopadding ?? uidb?.images?.default
+  if (!guid || !image) return null
+  return `https://static.ui.com/fingerprint/ui/images/${encodeURIComponent(guid)}/nopadding/${encodeURIComponent(image)}.png`
+}
+
+function deviceCategory(type?: string, productLine?: string) {
+  const product = productLine?.toLowerCase() ?? ""
+  if (product.includes("gateway")) return "gateway"
+  if (product.includes("access point") || product.includes("wifi")) return "access-point"
+  if (product.includes("switch")) return "switch"
   if (type === "ugw" || type === "uxg" || type === "udm") return "gateway"
   if (type === "uap") return "access-point"
   if (type === "usw") return "switch"
   return "other"
 }
 
-function mapDevice(device: LegacyDevice) {
-  const category = deviceCategory(device.type)
+function mapDevice(device: LegacyDevice, cloudDevice?: SiteManagerDevice) {
+  const category = deviceCategory(device.type, cloudDevice?.productLine)
 
   return {
     id: device._id ?? device.mac ?? `${device.model ?? "device"}-${device.ip ?? "unknown"}`,
@@ -160,6 +187,7 @@ function mapDevice(device: LegacyDevice) {
           port: device.uplink.uplink_remote_port ?? null,
         }
       : null,
+    imageUrl: uidbImageUrl(cloudDevice?.uidb),
   }
 }
 
@@ -186,8 +214,7 @@ function mapCloudKey(host: NonNullable<HostResponse["data"]>) {
     online: state?.state === "connected",
     adopted: null,
     uplink: null,
-    imageId: state?.uidb?.images?.nopadding ?? state?.uidb?.images?.default ?? null,
-    topologyImageId: state?.uidb?.images?.topology ?? null,
+    imageUrl: uidbImageUrl(state?.uidb),
   }
 }
 
@@ -206,7 +233,18 @@ async function loadCloudKey(site: SiteConfig, apiKey: string) {
   }
 }
 
-async function loadSiteDevices(site: SiteConfig, cloudSites: SiteManagerSite[], apiKey: string) {
+function cloudDeviceFor(device: LegacyDevice, devices: SiteManagerDevice[]) {
+  const mac = device.mac?.toLowerCase()
+  if (!mac) return undefined
+  return devices.find((candidate) => candidate.mac?.toLowerCase() === mac)
+}
+
+async function loadSiteDevices(
+  site: SiteConfig,
+  cloudSites: SiteManagerSite[],
+  cloudDeviceGroups: SiteManagerDeviceGroup[],
+  apiKey: string,
+) {
   const candidates = cloudSites.filter(
     (candidate): candidate is SiteManagerSite & { hostId: string } =>
       candidate.siteId === site.siteId && Boolean(candidate.hostId),
@@ -221,12 +259,17 @@ async function loadSiteDevices(site: SiteConfig, cloudSites: SiteManagerSite[], 
         ),
         loadCloudKey(site, apiKey),
       ])
+      const cloudDevices =
+        cloudDeviceGroups.find((group) => group.hostId === candidate.hostId)?.devices ?? []
 
       return {
         id: site.siteId,
         name: site.name,
         available: true,
-        devices: [...(response.data ?? []).map(mapDevice), ...(cloudKey ? [cloudKey] : [])],
+        devices: [
+          ...(response.data ?? []).map((device) => mapDevice(device, cloudDeviceFor(device, cloudDevices))),
+          ...(cloudKey ? [cloudKey] : []),
+        ],
       }
     } catch (error) {
       console.warn("Skipping unavailable UniFi console", candidate.hostId, error)
@@ -251,13 +294,15 @@ async function handleDevices() {
   }
 
   try {
-    const cloudSites = await unifiFetch<Page<SiteManagerSite>>(
-      "https://api.ui.com/v1/sites?pageSize=100",
-      apiKey,
-    )
+    const [cloudSites, cloudDevices] = await Promise.all([
+      unifiFetch<Page<SiteManagerSite>>("https://api.ui.com/v1/sites?pageSize=100", apiKey),
+      unifiFetch<Page<SiteManagerDeviceGroup>>("https://api.ui.com/v1/devices?pageSize=200", apiKey),
+    ])
 
     const sites = await Promise.all(
-      SITE_CONFIG.map((site) => loadSiteDevices(site, cloudSites.data ?? [], apiKey)),
+      SITE_CONFIG.map((site) =>
+        loadSiteDevices(site, cloudSites.data ?? [], cloudDevices.data ?? [], apiKey),
+      ),
     )
 
     return Response.json({ updatedAt: new Date().toISOString(), sites })
