@@ -29,16 +29,60 @@ type LegacyDevice = {
 type LegacyResponse<T> = { data?: T[] }
 type Page<T> = { data?: T[] }
 
+type HostResponse = {
+  data?: {
+    id?: string
+    reportedState?: {
+      state?: string
+      ip?: string
+      mac?: string
+      version?: string
+      deviceState?: string
+      firmwareUpdate?: { latestAvailableVersion?: string | null }
+      hardware?: {
+        name?: string
+        shortname?: string
+        firmwareVersion?: string
+        mac?: string
+      }
+      uidb?: {
+        images?: {
+          default?: string
+          nopadding?: string
+          topology?: string
+        }
+      }
+    }
+  }
+}
+
 type SiteConfig = {
   siteId: string
   name: string
+  cloudKeyHostId?: string
 }
 
 const SITE_CONFIG: SiteConfig[] = [
-  { siteId: "60b95da3e03dd800f8e1ab9a", name: "McCarthy's" },
-  { siteId: "6550b431b117fd5af385cd74", name: "Frog" },
-  { siteId: "66dee07febec17067adefdd1", name: "Bull's" },
-  { siteId: "66dc10313c42855ad7837628", name: "Library" },
+  {
+    siteId: "60b95da3e03dd800f8e1ab9a",
+    name: "McCarthy's",
+    cloudKeyHostId: "28704E3574670000000008290C09000000000897CA3900000000668829EF:2118761067",
+  },
+  {
+    siteId: "6550b431b117fd5af385cd74",
+    name: "Frog",
+    cloudKeyHostId: "28704E3576A7000000000826EF6A00000000089596090000000066827DCA:1369073404",
+  },
+  {
+    siteId: "66dee07febec17067adefdd1",
+    name: "Bull's",
+    cloudKeyHostId: "0CEA14F51A6B0000000008AF2495000000000926042100000000678CE75D:429262519",
+  },
+  {
+    siteId: "66dc10313c42855ad7837628",
+    name: "Library",
+    cloudKeyHostId: "28704E3564FD0000000008284BAC0000000008975D5D0000000066876953:2082695613",
+  },
   { siteId: "65e19814c653b505cd7183f3", name: "Milestone" },
 ]
 
@@ -119,6 +163,49 @@ function mapDevice(device: LegacyDevice) {
   }
 }
 
+function mapCloudKey(host: NonNullable<HostResponse["data"]>) {
+  const state = host.reportedState
+  const hardware = state?.hardware
+  const mac = hardware?.mac ?? state?.mac ?? null
+  const updateAvailable = state?.deviceState === "updateAvailable"
+
+  return {
+    id: `console-${host.id ?? mac ?? "cloudkey"}`,
+    name: "UCK G2 Plus",
+    model: "CloudKey+",
+    category: "console" as const,
+    ipAddress: state?.ip ?? null,
+    macAddress: mac,
+    firmwareVersion: hardware?.firmwareVersion ?? state?.version ?? null,
+    firmwareStatus: updateAvailable
+      ? ("update-available" as const)
+      : state?.firmwareUpdate?.latestAvailableVersion
+        ? ("up-to-date" as const)
+        : ("unknown" as const),
+    state: null,
+    online: state?.state === "connected",
+    adopted: null,
+    uplink: null,
+    imageId: state?.uidb?.images?.nopadding ?? state?.uidb?.images?.default ?? null,
+    topologyImageId: state?.uidb?.images?.topology ?? null,
+  }
+}
+
+async function loadCloudKey(site: SiteConfig, apiKey: string) {
+  if (!site.cloudKeyHostId) return null
+
+  try {
+    const response = await unifiFetch<HostResponse>(
+      `https://api.ui.com/v1/hosts/${encodeURIComponent(site.cloudKeyHostId)}`,
+      apiKey,
+    )
+    return response.data ? mapCloudKey(response.data) : null
+  } catch (error) {
+    console.warn("Unable to load UniFi console inventory record", site.cloudKeyHostId, error)
+    return null
+  }
+}
+
 async function loadSiteDevices(site: SiteConfig, cloudSites: SiteManagerSite[], apiKey: string) {
   const candidates = cloudSites.filter(
     (candidate): candidate is SiteManagerSite & { hostId: string } =>
@@ -127,16 +214,19 @@ async function loadSiteDevices(site: SiteConfig, cloudSites: SiteManagerSite[], 
 
   for (const candidate of candidates) {
     try {
-      const response = await unifiFetch<LegacyResponse<LegacyDevice>>(
-        `${connectorNetworkBase(candidate.hostId)}/api/s/default/stat/device`,
-        apiKey,
-      )
+      const [response, cloudKey] = await Promise.all([
+        unifiFetch<LegacyResponse<LegacyDevice>>(
+          `${connectorNetworkBase(candidate.hostId)}/api/s/default/stat/device`,
+          apiKey,
+        ),
+        loadCloudKey(site, apiKey),
+      ])
 
       return {
         id: site.siteId,
         name: site.name,
         available: true,
-        devices: (response.data ?? []).map(mapDevice),
+        devices: [...(response.data ?? []).map(mapDevice), ...(cloudKey ? [cloudKey] : [])],
       }
     } catch (error) {
       console.warn("Skipping unavailable UniFi console", candidate.hostId, error)
