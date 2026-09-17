@@ -33,8 +33,7 @@ type Device = {
   online: boolean
   adopted: boolean | null
   uplink: { name: string; macAddress: string | null; port: number | null } | null
-  imageId?: string | null
-  topologyImageId?: string | null
+  imageUrl?: string | null
 }
 
 type DeviceSite = {
@@ -60,9 +59,25 @@ function DeviceIcon({ category }: { category: Device["category"] }) {
           ? EthernetPortIcon
           : ServerIcon
 
+  return <Icon className="size-8" />
+}
+
+function DeviceArtwork({ device }: { device: Device }) {
+  const [failed, setFailed] = useState(false)
+
   return (
-    <div className="flex size-16 shrink-0 items-center justify-center rounded-xl border bg-muted/40 text-muted-foreground">
-      <Icon className="size-8" />
+    <div className="flex size-20 shrink-0 items-center justify-center rounded-xl border bg-muted/30 text-muted-foreground">
+      {device.imageUrl && !failed ? (
+        <img
+          src={device.imageUrl}
+          alt={`${device.model} hardware`}
+          className="size-[4.5rem] object-contain"
+          loading="lazy"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <DeviceIcon category={device.category} />
+      )}
     </div>
   )
 }
@@ -108,7 +123,7 @@ function DeviceCard({ device }: { device: Device }) {
     <Card className="min-w-0 overflow-hidden">
       <CardHeader className="pb-4">
         <div className="flex items-start gap-4">
-          <DeviceIcon category={device.category} />
+          <DeviceArtwork device={device} />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div className="min-w-0">
