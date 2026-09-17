@@ -4,6 +4,7 @@ import {
   CableIcon,
   CircleCheckIcon,
   CircleDotIcon,
+  CircleHelpIcon,
   EthernetPortIcon,
   NetworkIcon,
   RefreshCwIcon,
@@ -27,7 +28,7 @@ type Device = {
   ipAddress: string | null
   macAddress: string | null
   firmwareVersion: string | null
-  firmwareUpdateAvailable: boolean
+  firmwareStatus: "update-available" | "up-to-date" | "unknown"
   state: number | null
   online: boolean
   adopted: boolean | null
@@ -73,6 +74,33 @@ function DetailRow({ label, value }: { label: string; value: string | null }) {
   )
 }
 
+function FirmwareBadge({ status }: { status: Device["firmwareStatus"] }) {
+  if (status === "update-available") {
+    return (
+      <Badge variant="outline">
+        <RefreshCwIcon />
+        Firmware update available
+      </Badge>
+    )
+  }
+
+  if (status === "up-to-date") {
+    return (
+      <Badge variant="outline">
+        <CircleCheckIcon />
+        Firmware up to date
+      </Badge>
+    )
+  }
+
+  return (
+    <Badge variant="outline">
+      <CircleHelpIcon />
+      Firmware status unknown
+    </Badge>
+  )
+}
+
 function DeviceCard({ device }: { device: Device }) {
   return (
     <Card className="min-w-0 overflow-hidden">
@@ -99,17 +127,7 @@ function DeviceCard({ device }: { device: Device }) {
         <DetailRow label="Firmware" value={device.firmwareVersion} />
         {device.uplink ? <DetailRow label="Uplink" value={`${device.uplink.name}${device.uplink.port ? ` · Port ${device.uplink.port}` : ""}`} /> : null}
         <div className="pt-1">
-          {device.firmwareUpdateAvailable ? (
-            <Badge variant="outline">
-              <RefreshCwIcon />
-              Firmware update available
-            </Badge>
-          ) : (
-            <Badge variant="outline">
-              <CircleCheckIcon />
-              Firmware up to date
-            </Badge>
-          )}
+          <FirmwareBadge status={device.firmwareStatus} />
         </div>
       </CardContent>
     </Card>
