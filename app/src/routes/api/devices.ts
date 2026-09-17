@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router"
 
 type UidbInfo = { guid?: string | null; images?: { default?: string; nopadding?: string; topology?: string } }
 type SiteManagerSite = { siteId?: string; hostId?: string }
-type SiteManagerDevice = { mac?: string; name?: string; model?: string; productLine?: string; uidb?: UidbInfo }
+type SiteManagerDevice = { mac?: string; name?: string; model?: string; productLine?: string; updateAvailable?: string | null; uidb?: UidbInfo }
 type SiteManagerDeviceGroup = { hostId?: string; devices?: SiteManagerDevice[] }
 type LegacyDevice = {
   _id?: string; mac?: string; name?: string; model?: string; type?: string; sysid?: number; ip?: string; lan_ip?: string
@@ -113,6 +113,7 @@ function mapDevice(device: LegacyDevice, cloudDevice?: SiteManagerDevice) {
     macAddress: device.mac ?? null,
     firmwareVersion: device.displayable_version ?? device.version ?? null,
     firmwareStatus: device.upgradable === true ? "update-available" : device.upgradable === false ? "up-to-date" : "unknown",
+    firmwareAvailableVersion: cloudDevice?.updateAvailable ?? null,
     state: device.state ?? null,
     online: device.state === 1,
     adopted: device.adopted ?? null,
@@ -130,6 +131,7 @@ function mapCloudKey(host: NonNullable<HostResponse["data"]>, cloudDevice?: Site
     id: `console-${host.id ?? mac ?? "cloudkey"}`, name: "UCK G2 Plus", model: "CloudKey+", category: "console" as const,
     ipAddress: state?.ip ?? null, macAddress: mac, firmwareVersion: hardware?.firmwareVersion ?? state?.version ?? null,
     firmwareStatus: updateAvailable ? ("update-available" as const) : state?.firmwareUpdate?.latestAvailableVersion ? ("up-to-date" as const) : ("unknown" as const),
+    firmwareAvailableVersion: updateAvailable ? state?.firmwareUpdate?.latestAvailableVersion ?? cloudDevice?.updateAvailable ?? null : null,
     state: null, online: state?.state === "connected", adopted: null, uplink: null, imageUrl: ARTWORK_SOURCES["uck-g2-plus"],
   }
 }
