@@ -43,6 +43,10 @@ const ARTWORK_SOURCES: Record<string, string> = {
   "uck-g2-plus": "https://cdn.ecomm.ui.com/products/9310ab00-4fe7-46cb-872a-5077ffdd3d0d/d02a5340-e36b-4816-8470-d0761fd557db.png",
 }
 
+function normalizeFirmwareVersion(version?: string | null) {
+  return version?.split("+", 1)[0] ?? null
+}
+
 async function getApiKey() {
   if (process.env.UNIFI_API_KEY?.trim()) return process.env.UNIFI_API_KEY.trim()
   const keyFile = process.env.UNIFI_API_KEY_FILE
@@ -111,9 +115,9 @@ function mapDevice(device: LegacyDevice, cloudDevice?: SiteManagerDevice) {
     category,
     ipAddress: category === "gateway" ? device.lan_ip ?? device.ip ?? null : device.ip ?? device.lan_ip ?? null,
     macAddress: device.mac ?? null,
-    firmwareVersion: device.displayable_version ?? device.version ?? null,
+    firmwareVersion: normalizeFirmwareVersion(device.displayable_version ?? device.version),
     firmwareStatus: device.upgradable === true ? "update-available" : device.upgradable === false ? "up-to-date" : "unknown",
-    firmwareAvailableVersion: cloudDevice?.updateAvailable ?? null,
+    firmwareAvailableVersion: normalizeFirmwareVersion(cloudDevice?.updateAvailable),
     state: device.state ?? null,
     online: device.state === 1,
     adopted: device.adopted ?? null,
@@ -129,9 +133,9 @@ function mapCloudKey(host: NonNullable<HostResponse["data"]>, cloudDevice?: Site
   const updateAvailable = state?.deviceState === "updateAvailable"
   return {
     id: `console-${host.id ?? mac ?? "cloudkey"}`, name: "UCK G2 Plus", model: "CloudKey+", category: "console" as const,
-    ipAddress: state?.ip ?? null, macAddress: mac, firmwareVersion: hardware?.firmwareVersion ?? state?.version ?? null,
+    ipAddress: state?.ip ?? null, macAddress: mac, firmwareVersion: normalizeFirmwareVersion(hardware?.firmwareVersion ?? state?.version),
     firmwareStatus: updateAvailable ? ("update-available" as const) : state?.firmwareUpdate?.latestAvailableVersion ? ("up-to-date" as const) : ("unknown" as const),
-    firmwareAvailableVersion: updateAvailable ? state?.firmwareUpdate?.latestAvailableVersion ?? cloudDevice?.updateAvailable ?? null : null,
+    firmwareAvailableVersion: updateAvailable ? normalizeFirmwareVersion(state?.firmwareUpdate?.latestAvailableVersion ?? cloudDevice?.updateAvailable) : null,
     state: null, online: state?.state === "connected", adopted: null, uplink: null, imageUrl: ARTWORK_SOURCES["uck-g2-plus"],
   }
 }
