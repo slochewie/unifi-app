@@ -83,7 +83,7 @@ function connectorNetworkBase(hostId: string) {
 }
 
 function deviceCategory(type?: string) {
-  if (type === "ugw" || type === "udm") return "gateway"
+  if (type === "ugw" || type === "uxg" || type === "udm") return "gateway"
   if (type === "uap") return "access-point"
   if (type === "usw") return "switch"
   return "other"
