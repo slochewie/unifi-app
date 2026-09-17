@@ -10,8 +10,10 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as DevicesRouteImport } from './routes/devices'
 import { Route as ToastReadinessRouteImport } from './routes/toast-readiness'
 import { Route as ZonesRouteImport } from './routes/zones'
+import { Route as ApiDevicesRouteImport } from './routes/api/devices'
 import { Route as ApiStatusRouteImport } from './routes/api/status'
 import { Route as ApiToastPolicyRouteImport } from './routes/api/toast-policy'
 import { Route as ApiZonesRouteImport } from './routes/api/zones'
@@ -19,6 +21,11 @@ import { Route as ApiZonesRouteImport } from './routes/api/zones'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DevicesRoute = DevicesRouteImport.update({
+  id: '/devices',
+  path: '/devices',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ToastReadinessRoute = ToastReadinessRouteImport.update({
@@ -29,6 +36,11 @@ const ToastReadinessRoute = ToastReadinessRouteImport.update({
 const ZonesRoute = ZonesRouteImport.update({
   id: '/zones',
   path: '/zones',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiDevicesRoute = ApiDevicesRouteImport.update({
+  id: '/api/devices',
+  path: '/api/devices',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiStatusRoute = ApiStatusRouteImport.update({
@@ -49,16 +61,20 @@ const ApiZonesRoute = ApiZonesRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/devices': typeof DevicesRoute
   '/toast-readiness': typeof ToastReadinessRoute
   '/zones': typeof ZonesRoute
+  '/api/devices': typeof ApiDevicesRoute
   '/api/status': typeof ApiStatusRoute
   '/api/toast-policy': typeof ApiToastPolicyRoute
   '/api/zones': typeof ApiZonesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/devices': typeof DevicesRoute
   '/toast-readiness': typeof ToastReadinessRoute
   '/zones': typeof ZonesRoute
+  '/api/devices': typeof ApiDevicesRoute
   '/api/status': typeof ApiStatusRoute
   '/api/toast-policy': typeof ApiToastPolicyRoute
   '/api/zones': typeof ApiZonesRoute
@@ -66,8 +82,10 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/devices': typeof DevicesRoute
   '/toast-readiness': typeof ToastReadinessRoute
   '/zones': typeof ZonesRoute
+  '/api/devices': typeof ApiDevicesRoute
   '/api/status': typeof ApiStatusRoute
   '/api/toast-policy': typeof ApiToastPolicyRoute
   '/api/zones': typeof ApiZonesRoute
@@ -76,24 +94,30 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/devices'
     | '/toast-readiness'
     | '/zones'
+    | '/api/devices'
     | '/api/status'
     | '/api/toast-policy'
     | '/api/zones'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/devices'
     | '/toast-readiness'
     | '/zones'
+    | '/api/devices'
     | '/api/status'
     | '/api/toast-policy'
     | '/api/zones'
   id:
     | '__root__'
     | '/'
+    | '/devices'
     | '/toast-readiness'
     | '/zones'
+    | '/api/devices'
     | '/api/status'
     | '/api/toast-policy'
     | '/api/zones'
@@ -101,8 +125,10 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DevicesRoute: typeof DevicesRoute
   ToastReadinessRoute: typeof ToastReadinessRoute
   ZonesRoute: typeof ZonesRoute
+  ApiDevicesRoute: typeof ApiDevicesRoute
   ApiStatusRoute: typeof ApiStatusRoute
   ApiToastPolicyRoute: typeof ApiToastPolicyRoute
   ApiZonesRoute: typeof ApiZonesRoute
@@ -117,6 +143,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/devices': {
+      id: '/devices'
+      path: '/devices'
+      fullPath: '/devices'
+      preLoaderRoute: typeof DevicesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/toast-readiness': {
       id: '/toast-readiness'
       path: '/toast-readiness'
@@ -129,6 +162,13 @@ declare module '@tanstack/react-router' {
       path: '/zones'
       fullPath: '/zones'
       preLoaderRoute: typeof ZonesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/devices': {
+      id: '/api/devices'
+      path: '/api/devices'
+      fullPath: '/api/devices'
+      preLoaderRoute: typeof ApiDevicesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/status': {
@@ -157,8 +197,10 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DevicesRoute: DevicesRoute,
   ToastReadinessRoute: ToastReadinessRoute,
   ZonesRoute: ZonesRoute,
+  ApiDevicesRoute: ApiDevicesRoute,
   ApiStatusRoute: ApiStatusRoute,
   ApiToastPolicyRoute: ApiToastPolicyRoute,
   ApiZonesRoute: ApiZonesRoute,
