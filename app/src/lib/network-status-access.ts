@@ -8,8 +8,10 @@ export type NetworkStatusAssignment = {
   systemAdmin: boolean
   accessEnabled: boolean
   assignmentManagerEnabled: boolean
+  fabricOverviewEnabled: boolean
   canUpdateAccess: boolean
   canUpdateManager: boolean
+  canUpdateFabricOverview: boolean
 }
 
 type AssignmentsResponse = {
@@ -104,6 +106,20 @@ export function updateNetworkStatusManager(
     userId,
     enabled,
     "Unable to update Network Status manager.",
+  )
+}
+
+export function updateNetworkStatusFabricOverview(
+  organizationId: string,
+  userId: string,
+  enabled: boolean,
+) {
+  return updateFlag(
+    "/api/auth/network-status/fabric-overview",
+    organizationId,
+    userId,
+    enabled,
+    "Unable to update Fabric overview access.",
   )
 }
 
