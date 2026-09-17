@@ -71,7 +71,7 @@ function artworkKey(device: LegacyDevice, cloudDevice?: SiteManagerDevice) {
   if (identity.includes("lite 8") || identity.includes("usw-lite-8")) return "usw-lite-8-poe"
   if (identity.includes("ultra 60w") || identity.includes("switch ultra") || device.model === "USM8P60") return "usw-ultra-60w"
   if (identity.includes("flex 2.5g") || identity.includes("flex mini 2.5g")) return "usw-flex-2-5g-5"
-  if (identity.includes("u7 pro")) return "u7-pro"
+  if (device.model === "U7PRO" || cloudDevice?.model === "U7 Pro" || identity.includes("u7 pro")) return "u7-pro"
   if (identity.includes("u6 pro")) return "u6-pro"
   if (identity.includes("u6 mesh")) return "u6-mesh"
   if (identity.includes("nanohd")) return "uap-nanohd"
