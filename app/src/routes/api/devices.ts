@@ -40,6 +40,7 @@ const ARTWORK_SOURCES: Record<string, string> = {
   "ups-2u": "https://cdn.ecomm.ui.com/products/1674b854-0811-4d7a-a213-daa25326d903/de548757-5709-4f8f-9b0e-58846a113f99.png",
   "ucg-ultra": "https://cdn.ecomm.ui.com/products/8d2d9e4b-89f3-49a1-9c17-5d774c0067b4/2e179331-f85a-4bc9-bf3e-d00192522732.png",
   "usw-pro-24": "https://cdn.ecomm.ui.com/products/2315330e-7a37-4c6b-87df-0743d04e87ca/5281dd32-ad14-40c5-a8d0-2df56a340bae.png",
+  "uck-g2-plus": "https://cdn.ecomm.ui.com/products/9310ab00-4fe7-46cb-872a-5077ffdd3d0d/d02a5340-e36b-4816-8470-d0761fd557db.png",
 }
 
 async function getApiKey() {
@@ -128,7 +129,7 @@ function mapCloudKey(host: NonNullable<HostResponse["data"]>, cloudDevice?: Site
     id: `console-${host.id ?? mac ?? "cloudkey"}`, name: "UCK G2 Plus", model: "CloudKey+", category: "console" as const,
     ipAddress: state?.ip ?? null, macAddress: mac, firmwareVersion: hardware?.firmwareVersion ?? state?.version ?? null,
     firmwareStatus: updateAvailable ? ("update-available" as const) : state?.firmwareUpdate?.latestAvailableVersion ? ("up-to-date" as const) : ("unknown" as const),
-    state: null, online: state?.state === "connected", adopted: null, uplink: null, imageUrl: null,
+    state: null, online: state?.state === "connected", adopted: null, uplink: null, imageUrl: ARTWORK_SOURCES["uck-g2-plus"],
   }
 }
 
