@@ -31,6 +31,7 @@ const ARTWORK_SOURCES: Record<string, string> = {
   "usw-lite-8-poe": "https://cdn.ecomm.ui.com/products/75c44878-4e73-446e-8e86-f207db6b2b7c/53b8b06b-69c7-424f-bb81-2f8405356c65.png",
   "usw-ultra-60w": "https://cdn.ecomm.ui.com/products/d1af5d9b-b74c-4881-99af-033b71ed1590/f80567f8-ba09-4a75-982d-6fd636623492.png",
   "usw-flex-2-5g-5": "https://cdn.ecomm.ui.com/products/50830d51-4d7e-47ea-92f4-11043d3d664f/c956d05e-4351-46ba-b71e-afaafa3f1144.png",
+  "u-lte-backup-pro": "https://cdn.ecomm.ui.com/products/9ad9a106-7d80-49e5-81ff-80ba28fc86ad/cfd46b1c-be7c-4cda-97d5-ce25f26c320a.png",
   "u7-pro": "https://cdn.ecomm.ui.com/products/fa8dd4e4-36c8-4c79-a928-22c7bff2ce29/ab5bc8a4-6135-402e-a695-e3ea5e16d3e6.png",
   "u6-pro": "https://cdn.ecomm.ui.com/products/8e88b222-7a55-4cf0-8677-ae9b6347fe84/e16aa122-b5e5-4ffb-9f1a-27ee14d9ab3d.png",
   "u6-mesh": "https://cdn.ecomm.ui.com/products/7b8f8da5-d684-4170-be1f-71b53af8d7f9/fdce5345-80e9-4edd-bf5b-93cf9141649e.png",
@@ -64,10 +65,11 @@ function connectorNetworkBase(hostId: string) {
 
 function artworkKey(device: LegacyDevice, cloudDevice?: SiteManagerDevice) {
   const identity = [device.model, device.name, cloudDevice?.model, cloudDevice?.name].filter(Boolean).join(" ").toLowerCase()
+  if (device.model === "ULTEPUS" || identity.includes("lte pro") || identity.includes("lte backup pro")) return "u-lte-backup-pro"
   if (identity.includes("uxg") && identity.includes("fiber")) return "uxg-fiber"
   if (identity.includes("lite 16") || identity.includes("usw-lite-16")) return "usw-lite-16-poe"
   if (identity.includes("lite 8") || identity.includes("usw-lite-8")) return "usw-lite-8-poe"
-  if (identity.includes("ultra 60w")) return "usw-ultra-60w"
+  if (identity.includes("ultra 60w") || identity.includes("switch ultra") || device.model === "USM8P60") return "usw-ultra-60w"
   if (identity.includes("flex 2.5g") || identity.includes("flex mini 2.5g")) return "usw-flex-2-5g-5"
   if (identity.includes("u7 pro")) return "u7-pro"
   if (identity.includes("u6 pro")) return "u6-pro"
@@ -75,8 +77,8 @@ function artworkKey(device: LegacyDevice, cloudDevice?: SiteManagerDevice) {
   if (identity.includes("nanohd")) return "uap-nanohd"
   if (identity.includes("ups tower")) return "ups-tower"
   if (identity.includes("ups 2u")) return "ups-2u"
-  if (identity.includes("ucg ultra") || identity.includes("udrult")) return "ucg-ultra"
-  if (identity.includes("pro 24") || identity.includes("us24pro")) return "usw-pro-24"
+  if (identity.includes("ucg ultra") || identity.includes("udrult") || device.model === "UDRULT") return "ucg-ultra"
+  if (identity.includes("pro 24") || identity.includes("us24pro") || device.model === "US24PRO2") return "usw-pro-24"
   return null
 }
 
