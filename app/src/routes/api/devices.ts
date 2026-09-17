@@ -31,7 +31,7 @@ const ARTWORK_SOURCES: Record<string, string> = {
   "usw-lite-8-poe": "https://cdn.ecomm.ui.com/products/75c44878-4e73-446e-8e86-f207db6b2b7c/53b8b06b-69c7-424f-bb81-2f8405356c65.png",
   "usw-ultra-60w": "https://cdn.ecomm.ui.com/products/d1af5d9b-b74c-4881-99af-033b71ed1590/f80567f8-ba09-4a75-982d-6fd636623492.png",
   "usw-flex-2-5g-5": "https://cdn.ecomm.ui.com/products/50830d51-4d7e-47ea-92f4-11043d3d664f/c956d05e-4351-46ba-b71e-afaafa3f1144.png",
-  "u-lte-backup-pro": "https://cdn.ecomm.ui.com/products/6fa4d0a4-b362-4d52-8ac2-2a5e80c45854/8c0df563-0ff3-45a9-bca4-12057cd1826f.png",
+  "u-lte-backup-pro": "https://cdn.ecomm.ui.com/products/6fa4d0a4-b362-4d52-8ac2-2a5e80c45854/11cacc87-88fa-4cad-af23-f5118a301658.png",
   "u7-pro": "https://cdn.ecomm.ui.com/products/fa8dd4e4-36c8-4c79-a928-22c7bff2ce29/ab5bc8a4-6135-402e-a695-e3ea5e16d3e6.png",
   "u6-pro": "https://cdn.ecomm.ui.com/products/8e88b222-7a55-4cf0-8677-ae9b6347fe84/e16aa122-b5e5-4ffb-9f1a-27ee14d9ab3d.png",
   "u6-mesh": "https://cdn.ecomm.ui.com/products/7b8f8da5-d684-4170-be1f-71b53af8d7f9/fdce5345-80e9-4edd-bf5b-93cf9141649e.png",
@@ -45,6 +45,13 @@ const ARTWORK_SOURCES: Record<string, string> = {
 
 function normalizeFirmwareVersion(version?: string | null) {
   return version?.split("+", 1)[0] ?? null
+}
+
+function normalizeMacAddress(mac?: string | null) {
+  if (!mac) return null
+  const compact = mac.replace(/[^0-9a-f]/gi, "").toLowerCase()
+  if (compact.length !== 12) return mac.toLowerCase()
+  return compact.match(/.{2}/g)?.join(":") ?? mac.toLowerCase()
 }
 
 async function getApiKey() {
@@ -133,7 +140,7 @@ function mapCloudKey(host: NonNullable<HostResponse["data"]>, cloudDevice?: Site
   const updateAvailable = state?.deviceState === "updateAvailable"
   return {
     id: `console-${host.id ?? mac ?? "cloudkey"}`, name: "UCK G2 Plus", model: "CloudKey+", category: "console" as const,
-    ipAddress: state?.ip ?? null, macAddress: mac, firmwareVersion: normalizeFirmwareVersion(hardware?.firmwareVersion ?? state?.version),
+    ipAddress: state?.ip ?? null, macAddress: normalizeMacAddress(mac), firmwareVersion: normalizeFirmwareVersion(hardware?.firmwareVersion ?? state?.version),
     firmwareStatus: updateAvailable ? ("update-available" as const) : state?.firmwareUpdate?.latestAvailableVersion ? ("up-to-date" as const) : ("unknown" as const),
     firmwareAvailableVersion: updateAvailable ? normalizeFirmwareVersion(state?.firmwareUpdate?.latestAvailableVersion ?? cloudDevice?.updateAvailable) : null,
     state: null, online: state?.state === "connected", adopted: null, uplink: null, imageUrl: ARTWORK_SOURCES["uck-g2-plus"],
