@@ -37,3 +37,6 @@ Thumbs.db
 coverage/
 playwright-report/
 test-results/
+
+# TanStack Router generated route tree
+app/src/routeTree.gen.ts
