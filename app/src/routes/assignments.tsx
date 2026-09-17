@@ -31,6 +31,7 @@ import {
 } from "#/lib/network-status-access.ts"
 
 export const Route = createFileRoute("/assignments")({
+  head: () => ({ meta: [{ title: "UniFi Network Assignments" }] }),
   component: NetworkStatusAssignments,
 })
 
@@ -244,7 +245,7 @@ function NetworkStatusAssignments() {
           <UsersIcon />
         </div>
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Assignments</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">UniFi Network Assignments</h1>
           <p className="text-sm text-muted-foreground">
             Manage Network Status access for active organization members.
           </p>
