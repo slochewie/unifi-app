@@ -110,10 +110,8 @@ const MODEL_NAMES: Record<string, string> = {
 
 async function getApiKey() {
   if (process.env.UNIFI_API_KEY?.trim()) return process.env.UNIFI_API_KEY.trim()
-
   const keyFile = process.env.UNIFI_API_KEY_FILE
   if (!keyFile) return null
-
   try {
     return (await readFile(keyFile, "utf8")).trim()
   } catch {
@@ -122,19 +120,12 @@ async function getApiKey() {
 }
 
 async function unifiFetch<T>(url: string, apiKey: string) {
-  const response = await fetch(url, {
-    headers: {
-      Accept: "application/json",
-      "X-API-Key": apiKey,
-    },
-  })
-
+  const response = await fetch(url, { headers: { Accept: "application/json", "X-API-Key": apiKey } })
   if (!response.ok) {
     const body = await response.text()
     console.error("UniFi API error", response.status, url, body.slice(0, 500))
     throw new Error(`UniFi API returned ${response.status}`)
   }
-
   return (await response.json()) as T
 }
 
@@ -144,12 +135,15 @@ function connectorNetworkBase(hostId: string) {
 
 function uidbImageUrl(uidb?: UidbInfo) {
   const guid = uidb?.guid
+  const variant = uidb?.images?.nopadding ? "nopadding" : "default"
   const image = uidb?.images?.nopadding ?? uidb?.images?.default
   if (!guid || !image) return null
-  return `https://static.ui.com/fingerprint/ui/images/${encodeURIComponent(guid)}/nopadding/${encodeURIComponent(image)}.png`
+  return `https://static.ui.com/fingerprint/ui/images/${encodeURIComponent(guid)}/${variant}/${encodeURIComponent(image)}.png`
 }
 
-function deviceCategory(type?: string, productLine?: string) {
+function deviceCategory(type?: string, productLine?: string, model?: string) {
+  if (model === "ULTEPUS") return "lte"
+  if (model === "USWDA23" || model === "USWDA25") return "ups"
   const product = productLine?.toLowerCase() ?? ""
   if (product.includes("gateway")) return "gateway"
   if (product.includes("access point") || product.includes("wifi")) return "access-point"
@@ -161,8 +155,7 @@ function deviceCategory(type?: string, productLine?: string) {
 }
 
 function mapDevice(device: LegacyDevice, cloudDevice?: SiteManagerDevice) {
-  const category = deviceCategory(device.type, cloudDevice?.productLine)
-
+  const category = deviceCategory(device.type, cloudDevice?.productLine, device.model)
   return {
     id: device._id ?? device.mac ?? `${device.model ?? "device"}-${device.ip ?? "unknown"}`,
     name: device.name?.trim() || MODEL_NAMES[device.model ?? ""] || device.model || "UniFi Device",
@@ -171,32 +164,22 @@ function mapDevice(device: LegacyDevice, cloudDevice?: SiteManagerDevice) {
     ipAddress: category === "gateway" ? device.lan_ip ?? device.ip ?? null : device.ip ?? device.lan_ip ?? null,
     macAddress: device.mac ?? null,
     firmwareVersion: device.displayable_version ?? device.version ?? null,
-    firmwareStatus:
-      device.upgradable === true
-        ? "update-available"
-        : device.upgradable === false
-          ? "up-to-date"
-          : "unknown",
+    firmwareStatus: device.upgradable === true ? "update-available" : device.upgradable === false ? "up-to-date" : "unknown",
     state: device.state ?? null,
     online: device.state === 1,
     adopted: device.adopted ?? null,
     uplink: device.uplink?.uplink_device_name
-      ? {
-          name: device.uplink.uplink_device_name,
-          macAddress: device.uplink.uplink_device_mac ?? null,
-          port: device.uplink.uplink_remote_port ?? null,
-        }
+      ? { name: device.uplink.uplink_device_name, macAddress: device.uplink.uplink_device_mac ?? null, port: device.uplink.uplink_remote_port ?? null }
       : null,
     imageUrl: uidbImageUrl(cloudDevice?.uidb),
   }
 }
 
-function mapCloudKey(host: NonNullable<HostResponse["data"]>) {
+function mapCloudKey(host: NonNullable<HostResponse["data"]>, cloudDevice?: SiteManagerDevice) {
   const state = host.reportedState
   const hardware = state?.hardware
-  const mac = hardware?.mac ?? state?.mac ?? null
+  const mac = hardware?.mac ?? state?.mac ?? cloudDevice?.mac ?? null
   const updateAvailable = state?.deviceState === "updateAvailable"
-
   return {
     id: `console-${host.id ?? mac ?? "cloudkey"}`,
     name: "UCK G2 Plus",
@@ -205,63 +188,52 @@ function mapCloudKey(host: NonNullable<HostResponse["data"]>) {
     ipAddress: state?.ip ?? null,
     macAddress: mac,
     firmwareVersion: hardware?.firmwareVersion ?? state?.version ?? null,
-    firmwareStatus: updateAvailable
-      ? ("update-available" as const)
-      : state?.firmwareUpdate?.latestAvailableVersion
-        ? ("up-to-date" as const)
-        : ("unknown" as const),
+    firmwareStatus: updateAvailable ? ("update-available" as const) : state?.firmwareUpdate?.latestAvailableVersion ? ("up-to-date" as const) : ("unknown" as const),
     state: null,
     online: state?.state === "connected",
     adopted: null,
     uplink: null,
-    imageUrl: uidbImageUrl(state?.uidb),
+    imageUrl: uidbImageUrl(state?.uidb ?? cloudDevice?.uidb),
   }
 }
 
-async function loadCloudKey(site: SiteConfig, apiKey: string) {
-  if (!site.cloudKeyHostId) return null
+function cloudDeviceFor(device: LegacyDevice, devices: SiteManagerDevice[]) {
+  const mac = device.mac?.toLowerCase()
+  if (mac) {
+    const byMac = devices.find((candidate) => candidate.mac?.toLowerCase() === mac)
+    if (byMac) return byMac
+  }
+  return devices.find((candidate) => candidate.model === device.model)
+}
 
+function consoleDeviceFor(devices: SiteManagerDevice[]) {
+  return devices.find((device) => device.uidb && device.productLine?.toLowerCase().includes("cloudkey"))
+    ?? devices.find((device) => device.uidb && device.model?.toLowerCase().includes("uck"))
+}
+
+async function loadCloudKey(site: SiteConfig, cloudDevices: SiteManagerDevice[], apiKey: string) {
+  if (!site.cloudKeyHostId) return null
   try {
-    const response = await unifiFetch<HostResponse>(
-      `https://api.ui.com/v1/hosts/${encodeURIComponent(site.cloudKeyHostId)}`,
-      apiKey,
-    )
-    return response.data ? mapCloudKey(response.data) : null
+    const response = await unifiFetch<HostResponse>(`https://api.ui.com/v1/hosts/${encodeURIComponent(site.cloudKeyHostId)}`, apiKey)
+    return response.data ? mapCloudKey(response.data, consoleDeviceFor(cloudDevices)) : null
   } catch (error) {
     console.warn("Unable to load UniFi console inventory record", site.cloudKeyHostId, error)
     return null
   }
 }
 
-function cloudDeviceFor(device: LegacyDevice, devices: SiteManagerDevice[]) {
-  const mac = device.mac?.toLowerCase()
-  if (!mac) return undefined
-  return devices.find((candidate) => candidate.mac?.toLowerCase() === mac)
-}
-
-async function loadSiteDevices(
-  site: SiteConfig,
-  cloudSites: SiteManagerSite[],
-  cloudDeviceGroups: SiteManagerDeviceGroup[],
-  apiKey: string,
-) {
+async function loadSiteDevices(site: SiteConfig, cloudSites: SiteManagerSite[], cloudDeviceGroups: SiteManagerDeviceGroup[], apiKey: string) {
   const candidates = cloudSites.filter(
-    (candidate): candidate is SiteManagerSite & { hostId: string } =>
-      candidate.siteId === site.siteId && Boolean(candidate.hostId),
+    (candidate): candidate is SiteManagerSite & { hostId: string } => candidate.siteId === site.siteId && Boolean(candidate.hostId),
   )
 
   for (const candidate of candidates) {
     try {
+      const cloudDevices = cloudDeviceGroups.find((group) => group.hostId === candidate.hostId)?.devices ?? []
       const [response, cloudKey] = await Promise.all([
-        unifiFetch<LegacyResponse<LegacyDevice>>(
-          `${connectorNetworkBase(candidate.hostId)}/api/s/default/stat/device`,
-          apiKey,
-        ),
-        loadCloudKey(site, apiKey),
+        unifiFetch<LegacyResponse<LegacyDevice>>(`${connectorNetworkBase(candidate.hostId)}/api/s/default/stat/device`, apiKey),
+        loadCloudKey(site, cloudDevices, apiKey),
       ])
-      const cloudDevices =
-        cloudDeviceGroups.find((group) => group.hostId === candidate.hostId)?.devices ?? []
-
       return {
         id: site.siteId,
         name: site.name,
@@ -276,49 +248,24 @@ async function loadSiteDevices(
     }
   }
 
-  return {
-    id: site.siteId,
-    name: site.name,
-    available: false,
-    devices: [],
-  }
+  return { id: site.siteId, name: site.name, available: false, devices: [] }
 }
 
 async function handleDevices() {
   const apiKey = await getApiKey()
-  if (!apiKey) {
-    return Response.json(
-      { error: "UNIFI_API_KEY or UNIFI_API_KEY_FILE is not configured" },
-      { status: 503 },
-    )
-  }
+  if (!apiKey) return Response.json({ error: "UNIFI_API_KEY or UNIFI_API_KEY_FILE is not configured" }, { status: 503 })
 
   try {
     const [cloudSites, cloudDevices] = await Promise.all([
       unifiFetch<Page<SiteManagerSite>>("https://api.ui.com/v1/sites?pageSize=100", apiKey),
       unifiFetch<Page<SiteManagerDeviceGroup>>("https://api.ui.com/v1/devices?pageSize=200", apiKey),
     ])
-
-    const sites = await Promise.all(
-      SITE_CONFIG.map((site) =>
-        loadSiteDevices(site, cloudSites.data ?? [], cloudDevices.data ?? [], apiKey),
-      ),
-    )
-
+    const sites = await Promise.all(SITE_CONFIG.map((site) => loadSiteDevices(site, cloudSites.data ?? [], cloudDevices.data ?? [], apiKey)))
     return Response.json({ updatedAt: new Date().toISOString(), sites })
   } catch (error) {
     console.error("Failed to load UniFi devices", error)
-    return Response.json(
-      { error: error instanceof Error ? error.message : "Unable to reach UniFi Network API" },
-      { status: 502 },
-    )
+    return Response.json({ error: error instanceof Error ? error.message : "Unable to reach UniFi Network API" }, { status: 502 })
   }
 }
 
-export const Route = createFileRoute("/api/devices")({
-  server: {
-    handlers: {
-      GET: async () => await handleDevices(),
-    },
-  },
-})
+export const Route = createFileRoute("/api/devices")({ server: { handlers: { GET: async () => await handleDevices() } } })
