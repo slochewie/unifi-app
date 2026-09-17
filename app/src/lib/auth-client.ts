@@ -1,4 +1,5 @@
 import {
+  jwtClient,
   multiSessionClient,
   organizationClient,
 } from "better-auth/client/plugins"
@@ -28,6 +29,7 @@ export const authBaseURL = getAuthBaseURL()
 export const authClient = createAuthClient({
   baseURL: authBaseURL,
   plugins: [
+    jwtClient(),
     multiSessionClient(),
     organizationClient({
       teams: {
@@ -36,3 +38,22 @@ export const authClient = createAuthClient({
     }),
   ],
 })
+
+export async function networkStatusApiFetch(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+) {
+  const { data, error } = await authClient.token()
+
+  if (error || !data?.token) {
+    throw new Error("Unable to obtain Network Status authentication token.")
+  }
+
+  const headers = new Headers(init.headers)
+  headers.set("Authorization", `Bearer ${data.token}`)
+
+  return fetch(input, {
+    ...init,
+    headers,
+  })
+}
