@@ -68,17 +68,17 @@ function DetailRow({ label, value }: { label: string; value: string | null }) {
 }
 
 function FirmwareBadge({ status, availableVersion }: { status: Device["firmwareStatus"]; availableVersion?: string | null }) {
-  if (status === "update-available") return <Badge variant="outline"><RefreshCwIcon />{availableVersion ? `Firmware ${availableVersion} available` : "Firmware update available"}</Badge>
-  if (status === "up-to-date") return <Badge variant="outline"><CircleCheckIcon />Firmware up to date</Badge>
-  return <Badge variant="outline"><CircleHelpIcon />Firmware status unknown</Badge>
+  if (status === "update-available") return <Badge variant="outline" className="shrink-0 whitespace-nowrap"><RefreshCwIcon />{availableVersion ? `Firmware ${availableVersion} available` : "Firmware update available"}</Badge>
+  if (status === "up-to-date") return <Badge variant="outline" className="shrink-0 whitespace-nowrap"><CircleCheckIcon />Firmware up to date</Badge>
+  return <Badge variant="outline" className="shrink-0 whitespace-nowrap"><CircleHelpIcon />Firmware status unknown</Badge>
 }
 
 function FirmwareRow({ device }: { device: Device }) {
   return (
     <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-3 text-sm">
       <span className="text-muted-foreground">Firmware</span>
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <span className="font-medium">{device.firmwareVersion || "—"}</span>
+      <div className="flex min-w-0 flex-nowrap items-center gap-2">
+        <span className="shrink-0 font-medium">{device.firmwareVersion || "—"}</span>
         <FirmwareBadge status={device.firmwareStatus} availableVersion={device.firmwareAvailableVersion} />
       </div>
     </div>
