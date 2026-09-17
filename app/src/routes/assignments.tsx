@@ -26,6 +26,7 @@ import {
   listNetworkStatusAssignments,
   type NetworkStatusAssignment,
   updateNetworkStatusAccess,
+  updateNetworkStatusFabricOverview,
   updateNetworkStatusManager,
 } from "#/lib/network-status-access.ts"
 
@@ -196,6 +197,36 @@ function NetworkStatusAssignments() {
     }
   }
 
+  async function handleFabricOverviewToggle(assignment: NetworkStatusAssignment) {
+    if (
+      !activeOrganization?.id ||
+      updatingKey ||
+      !assignment.canUpdateFabricOverview
+    ) {
+      return
+    }
+    const key = `${assignment.userId}:fabric`
+    setUpdatingKey(key)
+    setAssignmentsError(null)
+    try {
+      mergeAssignment(
+        await updateNetworkStatusFabricOverview(
+          activeOrganization.id,
+          assignment.userId,
+          !assignment.fabricOverviewEnabled,
+        ),
+      )
+    } catch (error) {
+      setAssignmentsError(
+        error instanceof Error
+          ? error.message
+          : "Unable to update Fabric overview access.",
+      )
+    } finally {
+      setUpdatingKey(null)
+    }
+  }
+
   if (isPending || !session) {
     return (
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-5 p-4 md:p-6 lg:p-8">
@@ -224,7 +255,7 @@ function NetworkStatusAssignments() {
         <CardHeader>
           <CardTitle>Network Status access</CardTitle>
           <CardDescription>
-            Choose who can use Network Status and who can manage its assignments.
+            Choose who can use Network Status, manage assignments, and view status for other locations in the same Fabric. Fabric overview is view-only and does not grant access to peer organizations, devices, zones, Toast Readiness, or assignments.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -269,12 +300,14 @@ function NetworkStatusAssignments() {
                     <TableHead>Member</TableHead>
                     <TableHead>Access</TableHead>
                     <TableHead>Manager</TableHead>
+                    <TableHead>Fabric Overview</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredAssignments.map((assignment) => {
                     const accessUpdating = updatingKey === `${assignment.userId}:access`
                     const managerUpdating = updatingKey === `${assignment.userId}:manager`
+                    const fabricUpdating = updatingKey === `${assignment.userId}:fabric`
                     return (
                       <TableRow key={assignment.userId}>
                         <TableCell>
@@ -321,6 +354,31 @@ function NetworkStatusAssignments() {
                               }
                             >
                               {managerUpdating ? "Saving…" : "Manager"}
+                            </button>
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            asChild
+                            variant={assignment.fabricOverviewEnabled ? "default" : "outline"}
+                          >
+                            <button
+                              type="button"
+                              disabled={
+                                updatingKey !== null ||
+                                !assignment.canUpdateFabricOverview
+                              }
+                              aria-pressed={assignment.fabricOverviewEnabled}
+                              onClick={() => void handleFabricOverviewToggle(assignment)}
+                              className={
+                                assignment.canUpdateFabricOverview
+                                  ? assignment.fabricOverviewEnabled
+                                    ? "cursor-pointer"
+                                    : "cursor-pointer opacity-45"
+                                  : "cursor-not-allowed opacity-45"
+                              }
+                            >
+                              {fabricUpdating ? "Saving…" : "Fabric"}
                             </button>
                           </Badge>
                         </TableCell>
