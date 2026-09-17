@@ -100,10 +100,7 @@ function ToastReadinessPage() {
     setData({ zones: [] })
     setPolicy(null)
     setSelectedZoneId(null)
-    const params = new URLSearchParams({
-      organizationId: activeOrganization.id,
-      organizationName: activeOrganization.name,
-    })
+    const params = new URLSearchParams({ organizationId: activeOrganization.id, organizationName: activeOrganization.name })
     void fetch(`/api/zones?${params.toString()}`)
       .then(async (response) => {
         const body = (await response.json()) as ZonesResponse
@@ -112,24 +109,15 @@ function ToastReadinessPage() {
           setData(body)
           const toastZone = body.zones.find((zone) => zone.name.toLowerCase() === "toast")
           setSelectedZoneId(toastZone?.id ?? body.zones[0]?.id ?? null)
-        } else {
-          setData({ zones: [], error: body.error ?? `Unable to load zones (${response.status})` })
-        }
+        } else setData({ zones: [], error: body.error ?? `Unable to load zones (${response.status})` })
       })
-      .catch(() => {
-        if (!cancelled) setData({ zones: [], error: "Unable to load UniFi zones" })
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
+      .catch(() => { if (!cancelled) setData({ zones: [], error: "Unable to load UniFi zones" }) })
+      .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [activeOrganization?.id, activeOrganization?.name, session])
 
   useEffect(() => {
-    if (!session || !activeOrganization?.name || !selectedZoneId) {
-      setPolicy(null)
-      return
-    }
+    if (!session || !activeOrganization?.name || !selectedZoneId) { setPolicy(null); return }
     let cancelled = false
     setPolicy(null)
     const params = new URLSearchParams({ organizationName: activeOrganization.name, zoneId: selectedZoneId })
@@ -139,55 +127,20 @@ function ToastReadinessPage() {
         if (cancelled) return
         setPolicy(response.ok ? body : { error: body.error ?? `Unable to evaluate policy (${response.status})` })
       })
-      .catch(() => {
-        if (!cancelled) setPolicy({ error: "Unable to evaluate UniFi firewall and QoS policy" })
-      })
+      .catch(() => { if (!cancelled) setPolicy({ error: "Unable to evaluate UniFi firewall and QoS policy" }) })
     return () => { cancelled = true }
   }, [activeOrganization?.name, selectedZoneId, session])
 
-  const selectedZone = useMemo(
-    () => data.zones.find((zone) => zone.id === selectedZoneId) ?? null,
-    [data.zones, selectedZoneId],
-  )
+  const selectedZone = useMemo(() => data.zones.find((zone) => zone.id === selectedZoneId) ?? null, [data.zones, selectedZoneId])
   const requirements = useMemo(() => buildRequirements(selectedZone, policy), [selectedZone, policy])
-
   if (isPending || !session) return null
 
   return (
-    <main className="flex-1 p-4 md:p-6">
-      <div className="w-full space-y-6">
-        <div className="flex items-start gap-3">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-full border bg-card text-muted-foreground shadow-sm">
-            <ShieldCheckIcon className="size-5" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Toast Network Readiness</h1>
-            <p className="mt-1 text-sm text-muted-foreground">Checks the selected UniFi zone against Toast's self-managed network requirements.</p>
-          </div>
-        </div>
-        <ResourceSelector
-          title="Zone"
-          description="Select the UniFi zone used by Toast."
-          resources={data.zones}
-          value={selectedZoneId}
-          onValueChange={setSelectedZoneId}
-          placeholder="Select zone"
-          emptyLabel={data.error ?? "No zones available"}
-          loadingLabel="Loading UniFi zones…"
-          loading={loading}
-          icon={ShieldCheckIcon}
-        />
-        <Card>
-          <CardHeader>
-            <CardTitle>Requirements</CardTitle>
-            <CardDescription>Pass and fail are based on configuration exposed by UniFi. Verify requires a physical or operational check. Unknown means the current API data cannot prove either result.</CardDescription>
-          </CardHeader>
-          <CardContent className="divide-y">
-            {requirements.map((requirement) => <RequirementRow key={requirement.label} requirement={requirement} />)}
-          </CardContent>
-        </Card>
-      </div>
-    </main>
+    <main className="flex-1 p-4 md:p-6"><div className="w-full space-y-6">
+      <div className="flex items-start gap-3"><div className="flex size-10 shrink-0 items-center justify-center rounded-full border bg-card text-muted-foreground shadow-sm"><ShieldCheckIcon className="size-5" /></div><div><h1 className="text-2xl font-semibold tracking-tight">Toast Network Readiness</h1><p className="mt-1 text-sm text-muted-foreground">Checks the selected UniFi zone against Toast's self-managed network requirements.</p></div></div>
+      <ResourceSelector title="Zone" description="Select the UniFi zone used by Toast." resources={data.zones} value={selectedZoneId} onValueChange={setSelectedZoneId} placeholder="Select zone" emptyLabel={data.error ?? "No zones available"} loadingLabel="Loading UniFi zones…" loading={loading} icon={ShieldCheckIcon} />
+      <Card><CardHeader><CardTitle>Requirements</CardTitle><CardDescription>Pass and fail are based on configuration exposed by UniFi. Verify requires a physical or operational check. Unknown means the current API data cannot prove either result.</CardDescription></CardHeader><CardContent className="divide-y">{requirements.map((requirement) => <RequirementRow key={requirement.label} requirement={requirement} />)}</CardContent></Card>
+    </div></main>
   )
 }
 
@@ -197,65 +150,28 @@ function buildRequirements(zone: Zone | null, policy: PolicyResponse | null): Re
   const enabledBroadcasts = broadcasts.filter((broadcast) => broadcast.enabled !== false)
   const clients = networks.flatMap((network) => network.clients ?? [])
   const wirelessClients = clients.filter((client) => client.wired === false)
-  const clientsWithSignal = wirelessClients.filter(
-    (client): client is Client & { signalDbm: number } => client.signalDbm !== null,
-  )
-
+  const clientsWithSignal = wirelessClients.filter((client): client is Client & { signalDbm: number } => client.signalDbm !== null)
   const dedicatedVlan: Status = !zone ? "unknown" : networks.length === 0 ? "fail" : networks.every((network) => network.vlanId !== null) ? "pass" : "fail"
   const ssidMapped: Status = !zone ? "unknown" : networks.length === 0 || enabledBroadcasts.length === 0 ? "fail" : "pass"
   const fiveGhz: Status = enabledBroadcasts.length === 0 ? "unknown" : enabledBroadcasts.every((broadcast) => broadcast.frequenciesGHz.includes(5)) ? "pass" : "fail"
-  const wpa2: Status = enabledBroadcasts.length === 0 ? "unknown" : enabledBroadcasts.every((broadcast) => broadcast.securityType === "WPA2_AES_PERSONAL") ? "pass" : "fail"
+  const wpa2PersonalTypes = new Set(["WPA2_AES_PERSONAL", "WPA2_PERSONAL"])
+  const wpa2: Status = enabledBroadcasts.length === 0 ? "unknown" : enabledBroadcasts.every((broadcast) => broadcast.securityType !== null && wpa2PersonalTypes.has(broadcast.securityType)) ? "pass" : "fail"
   const isolationValues = enabledBroadcasts.map((broadcast) => broadcast.clientIsolationEnabled)
   const clientIsolation: Status = isolationValues.length === 0 || isolationValues.some((value) => value === null) ? "unknown" : isolationValues.every((value) => value === false) ? "pass" : "fail"
-  const localMulticast: Status = networks.length === 0 || enabledBroadcasts.length === 0
-    ? "unknown"
-    : enabledBroadcasts.every((broadcast) => broadcast.clientIsolationEnabled === false)
-      ? "pass"
-      : enabledBroadcasts.some((broadcast) => broadcast.clientIsolationEnabled === true)
-        ? "fail"
-        : "unknown"
-  const localMulticastDetail = localMulticast === "pass"
-    ? "Toast clients share the selected VLAN/SSID and WiFi client isolation is disabled. Cross-VLAN mDNS proxying is not required for local discovery within the Toast subnet."
-    : localMulticast === "fail"
-      ? "WiFi client isolation blocks local peer discovery on at least one Toast SSID."
-      : "UniFi does not expose enough local peer/multicast state to prove this requirement."
+  const localMulticast: Status = networks.length === 0 || enabledBroadcasts.length === 0 ? "unknown" : enabledBroadcasts.every((broadcast) => broadcast.clientIsolationEnabled === false) ? "pass" : enabledBroadcasts.some((broadcast) => broadcast.clientIsolationEnabled === true) ? "fail" : "unknown"
+  const localMulticastDetail = localMulticast === "pass" ? "Toast clients share the selected VLAN/SSID and WiFi client isolation is disabled. Cross-VLAN mDNS proxying is not required for local discovery within the Toast subnet." : localMulticast === "fail" ? "WiFi client isolation blocks local peer discovery on at least one Toast SSID." : "UniFi does not expose enough local peer/multicast state to prove this requirement."
   const signal: Status = wirelessClients.length === 0 || clientsWithSignal.length !== wirelessClients.length ? "unknown" : clientsWithSignal.every((client) => client.signalDbm >= -65) ? "pass" : "fail"
-  const signalDetail = wirelessClients.length === 0
-    ? "No wireless clients are currently connected to the selected network."
-    : clientsWithSignal.length > 0
-      ? clientsWithSignal.map((client) => `${client.name ?? client.mac ?? "Client"}: ${client.signalDbm} dBm`).join(", ")
-      : undefined
-
+  const signalDetail = wirelessClients.length === 0 ? "No wireless clients are currently connected to the selected network." : clientsWithSignal.length > 0 ? clientsWithSignal.map((client) => `${client.name ?? client.mac ?? "Client"}: ${client.signalDbm} dBm`).join(", ") : undefined
   const policyReady = Boolean(policy && zone && policy.zoneId === zone.id && !policy.error)
   const icmp: Status = !policyReady ? "unknown" : policy?.icmpEchoRepliesUnrestricted === true ? "pass" : "fail"
   const firewall: Status = !policyReady ? "unknown" : policy?.toastFirewallAllowlistReachable === true ? "pass" : "fail"
-  const firewallDetail = !policyReady
-    ? policy?.error
-    : policy?.toastFirewallAllowlistReachable
-      ? "Selected zone has unrestricted outbound Internet access; Toast's required destinations and ports are not blocked by UniFi zone policy."
-      : policy?.evidence?.restrictingOutboundPolicies?.length
-        ? `Restricting outbound policies: ${policy.evidence.restrictingOutboundPolicies.join(", ")}`
-        : "UniFi policy does not prove unrestricted outbound access."
-  const icmpDetail = !policyReady
-    ? policy?.error
-    : policy?.icmpEchoRepliesUnrestricted
-      ? "Outbound traffic is unrestricted and return traffic is allowed by the External → selected-zone policy."
-      : "UniFi policy does not prove unrestricted ICMP echo replies."
-
+  const firewallDetail = !policyReady ? policy?.error : policy?.toastFirewallAllowlistReachable ? "Selected zone has unrestricted outbound Internet access; Toast's required destinations and ports are not blocked by UniFi zone policy." : policy?.evidence?.restrictingOutboundPolicies?.length ? `Restricting outbound policies: ${policy.evidence.restrictingOutboundPolicies.join(", ")}` : "UniFi policy does not prove unrestricted outbound access."
+  const icmpDetail = !policyReady ? policy?.error : policy?.icmpEchoRepliesUnrestricted ? "Outbound traffic is unrestricted and return traffic is allowed by the External → selected-zone policy." : "UniFi policy does not prove unrestricted ICMP echo replies."
   const qos = policy?.qos
   const qosStatus: Status = !policyReady || qos?.configuredForToast === undefined ? "unknown" : qos.configuredForToast ? "pass" : "fail"
-  const qosDetail = !policyReady
-    ? policy?.error
-    : qos?.configuredForToast
-      ? `${qos.toastQosRuleCount ?? 0} enabled UniFi QoS rule${qos.toastQosRuleCount === 1 ? "" : "s"} target${qos.toastQosRuleCount === 1 ? "s" : ""} the selected Toast network${policy?.evidence?.toastQosRules?.length ? `: ${policy.evidence.toastQosRules.map((rule) => rule.name ?? "QoS rule").join(", ")}` : ""}.`
-      : "No enabled UniFi QoS rule targeting the selected Toast network was detected."
-
-  const bandwidthStatus: Status = !policyReady || qos?.wanCapacityMeetsRecommendation === null || qos?.wanCapacityMeetsRecommendation === undefined
-    ? "unknown"
-    : qos.wanCapacityMeetsRecommendation ? "pass" : "fail"
-  const bandwidthDetail = qos?.wanDownloadMbps !== null && qos?.wanDownloadMbps !== undefined && qos?.wanUploadMbps !== null && qos?.wanUploadMbps !== undefined
-    ? `${qos.wanName ?? "Primary WAN"}: ${qos.wanDownloadMbps} Mbps down / ${qos.wanUploadMbps} Mbps up reported provider capacity. Toast recommends ${qos.recommendedDownloadMbps ?? 15} Mbps down / ${qos.recommendedUploadMbps ?? 5} Mbps up.`
-    : "UniFi does not expose enough WAN capacity information to compare against Toast's recommendation."
+  const qosDetail = !policyReady ? policy?.error : qos?.configuredForToast ? `${qos.toastQosRuleCount ?? 0} enabled UniFi QoS rule${qos.toastQosRuleCount === 1 ? "" : "s"} target${qos.toastQosRuleCount === 1 ? "s" : ""} the selected Toast network${policy?.evidence?.toastQosRules?.length ? `: ${policy.evidence.toastQosRules.map((rule) => rule.name ?? "QoS rule").join(", ")}` : ""}.` : "No enabled UniFi QoS rule targeting the selected Toast network was detected."
+  const bandwidthStatus: Status = !policyReady || qos?.wanCapacityMeetsRecommendation === null || qos?.wanCapacityMeetsRecommendation === undefined ? "unknown" : qos.wanCapacityMeetsRecommendation ? "pass" : "fail"
+  const bandwidthDetail = qos?.wanDownloadMbps !== null && qos?.wanDownloadMbps !== undefined && qos?.wanUploadMbps !== null && qos?.wanUploadMbps !== undefined ? `${qos.wanName ?? "Primary WAN"}: ${qos.wanDownloadMbps} Mbps down / ${qos.wanUploadMbps} Mbps up reported provider capacity. Toast recommends ${qos.recommendedDownloadMbps ?? 15} Mbps down / ${qos.recommendedUploadMbps ?? 5} Mbps up.` : "UniFi does not expose enough WAN capacity information to compare against Toast's recommendation."
 
   return [
     { label: "Dedicated Toast VLAN", source: "UniFi network", status: dedicatedVlan, detail: networks.length > 0 ? networks.map((network) => `${network.name} · VLAN ${network.vlanId ?? "none"}`).join(", ") : undefined },
@@ -288,10 +204,7 @@ function RequirementRow({ requirement }: { requirement: Requirement }) {
   return (
     <div className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
       <Icon className={`mt-0.5 size-5 shrink-0 ${iconClassName}`} />
-      <div className="min-w-0 flex-1">
-        <p className="font-medium">{requirement.label}</p>
-        <p className="text-sm text-muted-foreground">{requirement.source}{requirement.detail ? ` · ${requirement.detail}` : ""}</p>
-      </div>
+      <div className="min-w-0 flex-1"><p className="font-medium">{requirement.label}</p><p className="text-sm text-muted-foreground">{requirement.source}{requirement.detail ? ` · ${requirement.detail}` : ""}</p></div>
       <span className="shrink-0 text-sm font-medium text-muted-foreground">{label}</span>
     </div>
   )
