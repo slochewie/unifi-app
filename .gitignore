@@ -40,3 +40,4 @@ test-results/
 
 # TanStack Router generated route tree
 app/src/routeTree.gen.ts
+.aider*
