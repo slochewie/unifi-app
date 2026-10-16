@@ -15,6 +15,7 @@ import {
 import {
   Building2Icon,
   LogOutIcon,
+  MonitorSmartphoneIcon,
   PaletteIcon,
   SettingsIcon,
   ShieldCheckIcon,
@@ -114,6 +115,9 @@ export function AppChrome({ children }: { children: ReactNode }) {
   const primarySection = navigation?.primary[0]
   const appsSection = navigation?.apps[0]
   const currentHref = appLinks ? `${appLinks["network-status"].replace(/\/$/, "")}${location.pathname}` : null
+  const clientDevicesHref = appLinks
+    ? `${appLinks["network-status"].replace(/\/$/, "")}/clients`
+    : "/clients"
 
   return (
     <TooltipProvider>
@@ -122,7 +126,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
           <SidebarHeader>{currentHref && brand ? <SidebarIdentityToggle href={currentHref} brand={brand} /> : <div className="h-12" aria-hidden="true" />}</SidebarHeader>
           <SidebarSeparator />
           <SidebarContent>
-            {primarySection ? <SidebarGroup><SidebarGroupContent><SidebarMenu>{primarySection.items.map((item) => <SidebarMenuItem key={item.id}><SidebarMenuButton isActive={item.active} tooltip={item.label} onClick={() => window.location.assign(item.href)}><NiteOwlNavigationIcon icon={item.icon} /><span>{item.label}</span></SidebarMenuButton></SidebarMenuItem>)}</SidebarMenu></SidebarGroupContent></SidebarGroup> : null}
+            {primarySection ? <SidebarGroup><SidebarGroupContent><SidebarMenu>{primarySection.items.map((item) => { const label = new URL(item.href, "https://network-status.invalid").pathname.endsWith("/devices") ? "UniFi Devices" : item.label; return <SidebarMenuItem key={item.id}><SidebarMenuButton isActive={item.active} tooltip={label} onClick={() => window.location.assign(item.href)}><NiteOwlNavigationIcon icon={item.icon} /><span>{label}</span></SidebarMenuButton></SidebarMenuItem> })}<SidebarMenuItem><SidebarMenuButton isActive={location.pathname === "/clients"} tooltip="Client Devices" onClick={() => window.location.assign(clientDevicesHref)}><MonitorSmartphoneIcon /><span>Client Devices</span></SidebarMenuButton></SidebarMenuItem></SidebarMenu></SidebarGroupContent></SidebarGroup> : null}
             <SidebarSeparator />
             {appsSection ? <SidebarGroup><SidebarGroupLabel className="text-sm">{appsSection.label}</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{appsSection.items.map((item) => <SidebarMenuItem key={item.id}><SidebarMenuButton tooltip={item.label} onClick={() => window.location.assign(item.href)}><NiteOwlNavigationIcon icon={item.icon} /><span>{item.label}</span></SidebarMenuButton></SidebarMenuItem>)}</SidebarMenu></SidebarGroupContent></SidebarGroup> : null}
             <SidebarSeparator />
